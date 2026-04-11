@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NIE Western — Kitchen</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0d1a; color: white; min-height: 100vh; }
+
+        /* ── HEADER ── */
+        .header { background: #1a1a2e; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #2a2a45; }
+        .header-left h1 { font-size: 17px; font-weight: 800; }
+        .header-left p { font-size: 11px; color: #8899bb; margin-top: 2px; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .pending-badge { background: #d62839; color: white; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+        .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #4caf50; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        /* ── CONTROLS ── */
+        .controls { padding: 12px 16px; background: #12122a; border-bottom: 1px solid #1e1e3a; display: flex; gap: 8px; align-items: center; }
+        .ctrl-btn { background: #1e1e3a; border: 1px solid #2a2a45; color: #aaa; padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .ctrl-btn.active, .ctrl-btn:hover { background: #d62839; color: white; border-color: #d62839; }
+
+        /* ── GRID ── */
+        .orders-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; padding: 16px; }
+
+        /* ── ORDER CARD ── */
+        .order-card { background: #1a1a2e; border-radius: 12px; overflow: hidden; border: 1px solid #2a2a45; transition: all 0.3s; }
+        .order-card.new { border-color: #d62839; box-shadow: 0 0 0 2px rgba(214,40,57,0.25); animation: newPulse 1s ease-in-out 3; }
+        @keyframes newPulse { 0%,100%{box-shadow:0 0 0 2px rgba(214,40,57,0.25)} 50%{box-shadow:0 0 0 6px rgba(214,40,57,0.1)} }
+        .order-card.done { opacity: 0.45; border-color: #2a2a45; }
+
+        .card-top { background: #d62839; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; }
+        .order-card.done .card-top { background: #2d5a2d; }
+        .order-num-big { font-size: 32px; font-weight: 900; line-height: 1; }
+        .card-top-right { text-align: right; }
+        .table-label { font-size: 11px; color: rgba(255,255,255,0.7); }
+        .table-val { font-size: 18px; font-weight: 800; }
+        .time-elapsed { font-size: 11px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+
+        .card-body { padding: 12px 14px; }
+        .order-item-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid #2a2a3e; }
+        .order-item-row:last-child { border-bottom: none; }
+        .item-qty-badge { background: #d62839; color: white; min-width: 24px; height: 24px; border-radius: 5px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+        .order-card.done .item-qty-badge { background: #4caf50; }
+        .item-name-text { font-size: 13.5px; font-weight: 500; line-height: 1.3; color: #ddd; }
+
+        .note-box { background: #ffd16615; border: 1px solid #ffd16630; border-radius: 6px; padding: 8px 10px; margin-top: 10px; font-size: 12px; color: #ffd166; line-height: 1.4; }
+
+        .card-footer { padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 7px; }
+        .total-line { font-size: 12px; color: #666; text-align: right; margin-bottom: 2px; }
+
+        .print-btn { background: #1565c0; color: white; border: none; padding: 9px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .print-btn:hover { background: #1976d2; }
+        .done-btn { background: #2e7d32; color: white; border: none; padding: 11px; border-radius: 8px; font-size: 14px; font-weight: 800; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .done-btn:hover { background: #388e3c; }
+        .undone-btn { background: #555; color: white; border: none; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; width: 100%; }
+
+        /* ── EMPTY / ALERT ── */
+        .empty-state { color: #444; text-align: center; padding: 80px 20px; font-size: 15px; line-height: 2; }
+        .alert-banner { background: #d62839; color: white; text-align: center; padding: 10px; font-weight: 700; font-size: 14px; display: none; }
+        .alert-banner.show { display: block; animation: flashBanner 0.5s infinite alternate; }
+        @keyframes flashBanner { from{opacity:1} to{opacity:0.7} }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <h1>🍽️ NIE Western — Kitchen</h1>
+        <p id="time-display">—</p>
+    </div>
+    <div class="header-right">
+        <span class="pending-badge" id="pending-badge">0</span>
+        <div class="live-dot"></div>
+    </div>
+</div>
+
+<div class="alert-banner" id="alert-banner">🔔 NEW ORDER RECEIVED</div>
+
+<div class="controls">
+    <button class="ctrl-btn active" id="filter-all"     onclick="setFilter('all')">All</button>
+    <button class="ctrl-btn"        id="filter-pending" onclick="setFilter('pending')">Pending</button>
+    <button class="ctrl-btn"        id="filter-done"    onclick="setFilter('done')">Done</button>
+    <button class="ctrl-btn"        style="margin-left:auto" onclick="clearDone()">Clear Done</button>
+</div>
+
+<div id="orders-area">
+    <div class="empty-state">⏳ Waiting for orders…</div>
+</div>
+
+<script type="module">
+import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, update, remove, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ════════════════════════════════════
+//  FIREBASE CONFIG  — fill in yours
+// ════════════════════════════════════
+const firebaseConfig = {
+    apiKey:            "YOUR_API_KEY",
+    authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL:       "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:         "YOUR_PROJECT_ID",
+    storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId:             "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+let allOrders  = {};
+let currentFilter = "all";
+let prevOrderKeys = new Set();
+let firstLoad = true;
+
+// Clock
+setInterval(() => {
+    document.getElementById("time-display").textContent =
+        new Date().toLocaleTimeString("en-SG", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+}, 1000);
+
+// ── LISTEN ──
+onValue(ref(db, "nie_western/orders"), snap => {
+    const data = snap.val() || {};
+
+    // Detect genuinely new orders (not first load)
+    if (!firstLoad) {
+        const newKeys = Object.keys(data).filter(k => !prevOrderKeys.has(k) && data[k].status === "pending");
+        if (newKeys.length) triggerNewOrderAlert();
+    }
+
+    prevOrderKeys = new Set(Object.keys(data));
+    firstLoad = false;
+    allOrders = data;
+    render();
+});
+
+function triggerNewOrderAlert() {
+    const banner = document.getElementById("alert-banner");
+    banner.classList.add("show");
+    try { new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA...").play(); } catch(e) {}
+    setTimeout(() => banner.classList.remove("show"), 4000);
+}
+
+// ── RENDER ──
+window.setFilter = (f) => {
+    currentFilter = f;
+    ["all","pending","done"].forEach(id => {
+        document.getElementById("filter-" + id).classList.toggle("active", id === f);
+    });
+    render();
+};
+
+function render() {
+    const area = document.getElementById("orders-area");
+    let entries = Object.entries(allOrders).sort((a,b) => a[1].timestamp - b[1].timestamp);
+
+    if (currentFilter !== "all") {
+        entries = entries.filter(([,o]) => o.status === currentFilter);
+    }
+
+    const pendingCount = Object.values(allOrders).filter(o => o.status === "pending").length;
+    document.getElementById("pending-badge").textContent = pendingCount;
+    document.title = pendingCount > 0 ? `(${pendingCount}) NIE Western — Kitchen` : "NIE Western — Kitchen";
+
+    if (!entries.length) {
+        area.innerHTML = '<div class="empty-state">✅ No orders to show<br><span style="font-size:13px">New orders will appear instantly</span></div>';
+        return;
+    }
+
+    area.innerHTML = '<div class="orders-grid" id="orders-grid"></div>';
+    const grid = document.getElementById("orders-grid");
+
+    entries.forEach(([key, order]) => {
+        const isDone    = order.status === "done";
+        const isNew     = !isDone && (Date.now() - order.timestamp < 30000);
+        const elapsedMs = Date.now() - order.timestamp;
+        const elapsedMin = Math.floor(elapsedMs / 60000);
+        const elapsedStr = elapsedMin === 0 ? "Just now" : elapsedMin + "m ago";
+
+        const card = document.createElement("div");
+        card.className = "order-card" + (isDone ? " done" : "") + (isNew ? " new" : "");
+        card.innerHTML = `
+            <div class="card-top">
+                <div class="order-num-big">#${String(order.orderNum).padStart(2,"0")}</div>
+                <div class="card-top-right">
+                    <div class="table-label">TABLE</div>
+                    <div class="table-val">${order.table}</div>
+                    <div class="time-elapsed">${elapsedStr}</div>
+                </div>
+            </div>
+            <div class="card-body">
+                ${order.items.map(i => `
+                    <div class="order-item-row">
+                        <div class="item-qty-badge">${i.qty}</div>
+                        <div class="item-name-text">${i.name}</div>
+                    </div>
+                `).join("")}
+                ${order.note ? `<div class="note-box">📝 ${order.note}</div>` : ""}
+            </div>
+            <div class="card-footer">
+                <div class="total-line">Total: $${order.total.toFixed(2)}</div>
+                ${!isDone ? `
+                    <button class="print-btn" onclick="printOrder('${key}')">🖨️ Print Receipt</button>
+                    <button class="done-btn"  onclick="markDone('${key}')">✓ Order Done</button>
+                ` : `
+                    <button class="undone-btn" onclick="markPending('${key}')">↩ Reopen</button>
+                `}
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+// ── ACTIONS ──
+window.markDone = async (key) => {
+    await update(ref(db, `nie_western/orders/${key}`), { status: "done" });
+};
+
+window.markPending = async (key) => {
+    await update(ref(db, `nie_western/orders/${key}`), { status: "pending" });
+};
+
+window.clearDone = async () => {
+    if (!confirm("Clear all completed orders?")) return;
+    const entries = Object.entries(allOrders).filter(([,o]) => o.status === "done");
+    for (const [key] of entries) {
+        await remove(ref(db, `nie_western/orders/${key}`));
+    }
+};
+
+// ── PRINT (RawBT ESC/POS) ──
+window.printOrder = (key) => {
+    const order = allOrders[key];
+    if (!order) return;
+
+    const ESC = "\x1B", GS = "\x1D";
+    const INIT   = ESC + "@";
+    const BOLD1  = ESC + "E\x01";
+    const BOLD0  = ESC + "E\x00";
+    const ALIGN_C = ESC + "a\x01";
+    const ALIGN_L = ESC + "a\x00";
+    const SIZE_2H = GS  + "!\x10";   // Double height
+    const SIZE_NM = GS  + "!\x00";   // Normal
+    const CUT    = GS  + "V\x41\x00";
+    const LF = "\n";
+    const DIVIDER = "================================";
+    const LINE    = "--------------------------------";
+
+    function padLine(left, right, total = 32) {
+        const space = total - left.length - right.length;
+        return left + " ".repeat(Math.max(1, space)) + right;
+    }
+
+    let r = INIT;
+
+    r += ALIGN_C;
+    r += BOLD1 + SIZE_2H + "NIE WESTERN" + SIZE_NM + BOLD0 + LF;
+    r += "Olivye Western Cuisine" + LF;
+    r += DIVIDER + LF;
+
+    r += BOLD1 + "ORDER  #" + String(order.orderNum).padStart(2,"0") + BOLD0 + LF;
+    r += "Table : " + order.table + LF;
+    r += new Date().toLocaleString("en-SG", { hour12: false,
+        day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) + LF;
+    r += DIVIDER + LF + LF;
+
+    r += ALIGN_L;
+    order.items.forEach(item => {
+        const nameStr = `${item.qty}x ${item.name}`;
+        const priceStr = "$" + (item.price * item.qty).toFixed(2);
+        // Wrap long names
+        if (nameStr.length > 24) {
+            r += nameStr + LF;
+            r += " ".repeat(26) + priceStr + LF;
+        } else {
+            r += padLine(nameStr, priceStr) + LF;
+        }
+    });
+
+    r += LF + LINE + LF;
+    r += BOLD1 + padLine("TOTAL", "$" + order.total.toFixed(2)) + BOLD0 + LF;
+    r += LINE + LF;
+
+    if (order.note) {
+        r += LF + "Note: " + order.note + LF;
+    }
+
+    r += LF + ALIGN_C + "Thank you!" + LF;
+    r += LF + LF + LF + CUT;
+
+    // Send to RawBT via intent URL
+    try {
+        const encoded = btoa(unescape(encodeURIComponent(r)));
+        const intentUrl = "rawbt:base64," + encoded;
+        const link = document.createElement("a");
+        link.href = intentUrl;
+        link.click();
+    } catch (err) {
+        console.error("Print error:", err);
+        alert("Print failed. Is RawBT installed?");
+    }
+};
+</script>
+</body>
+</html>
