@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NIE Western — Order Here</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f5; color: #1a1a2e; min-height: 100vh; }
+
+        /* ── HEADER ── */
+        .header { background: #1a1a2e; color: white; padding: 14px 16px 12px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        .header h1 { font-size: 19px; font-weight: 800; letter-spacing: 0.5px; }
+        .header p { font-size: 11px; color: #8899bb; margin-top: 2px; }
+
+        /* ── CATEGORY TABS ── */
+        .tabs-wrap { background: white; border-bottom: 2px solid #eee; position: sticky; top: 57px; z-index: 99; overflow-x: auto; scrollbar-width: none; display: flex; }
+        .tabs-wrap::-webkit-scrollbar { display: none; }
+        .tab { padding: 11px 15px; white-space: nowrap; font-size: 12px; font-weight: 700; color: #888; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; flex-shrink: 0; }
+        .tab.active { color: #d62839; border-bottom-color: #d62839; }
+
+        /* ── MENU ── */
+        .cat-section { padding: 16px 14px 4px; }
+        .cat-title { font-size: 15px; font-weight: 800; color: #1a1a2e; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #eee; }
+
+        .item-card { background: white; border-radius: 10px; padding: 13px 14px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+        .item-info { flex: 1; min-width: 0; }
+        .item-name { font-size: 13.5px; font-weight: 600; color: #1a1a2e; line-height: 1.3; }
+        .item-price { font-size: 13px; color: #d62839; font-weight: 700; margin-top: 3px; }
+        .add-btn { background: #d62839; color: white; border: none; width: 34px; height: 34px; border-radius: 50%; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; flex-shrink: 0; box-shadow: 0 2px 6px rgba(214,40,57,0.35); transition: transform 0.1s; }
+        .add-btn:active { transform: scale(0.9); }
+
+        /* ── BREAKFAST BANNER ── */
+        .bfast-banner { background: #fff8e1; border: 1px solid #ffcc02; border-radius: 8px; margin: 12px 14px; padding: 10px 14px; font-size: 12.5px; color: #7a5c00; text-align: center; }
+
+        /* ── CART BAR ── */
+        .cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1a1a2e; color: white; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; z-index: 200; transform: translateY(110%); transition: transform 0.3s ease; }
+        .cart-bar.visible { transform: translateY(0); }
+        .cart-label { font-size: 13px; line-height: 1.4; }
+        .cart-count-label { font-weight: 700; font-size: 15px; }
+        .cart-price-label { color: #ffd166; font-weight: 700; }
+        .view-btn { background: #d62839; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
+
+        /* ── MODAL ── */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 300; display: none; align-items: flex-end; }
+        .overlay.open { display: flex; }
+        .cart-sheet { background: white; border-radius: 20px 20px 0 0; width: 100%; max-height: 88vh; overflow-y: auto; padding: 0 0 20px; }
+        .sheet-handle { width: 40px; height: 4px; background: #ddd; border-radius: 2px; margin: 14px auto 0; }
+        .sheet-header { padding: 14px 18px 10px; border-bottom: 1px solid #eee; }
+        .sheet-title { font-size: 17px; font-weight: 800; }
+        .cart-items-list { padding: 8px 18px; }
+
+        .cart-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f2f2f2; }
+        .cart-row:last-child { border-bottom: none; }
+        .qty-ctrl { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+        .qty-btn { background: #f0f0f5; border: none; width: 28px; height: 28px; border-radius: 50%; font-size: 17px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #1a1a2e; }
+        .qty-num { font-weight: 700; font-size: 14px; min-width: 18px; text-align: center; }
+        .cart-row-name { flex: 1; font-size: 13px; font-weight: 500; color: #1a1a2e; }
+        .cart-row-price { font-size: 13px; font-weight: 700; color: #d62839; white-space: nowrap; }
+
+        .cart-form { padding: 8px 18px; }
+        .field-label { font-size: 12px; font-weight: 700; color: #666; margin-bottom: 5px; display: block; margin-top: 12px; }
+        .field-input { width: 100%; border: 2px solid #e5e5e5; border-radius: 9px; padding: 11px 12px; font-size: 15px; font-family: inherit; color: #1a1a2e; transition: border-color 0.2s; }
+        .field-input:focus { outline: none; border-color: #d62839; }
+        .field-input.error { border-color: #d62839; animation: shake 0.3s; }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+        textarea.field-input { resize: none; }
+
+        .total-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-top: 2px solid #eee; margin-top: 8px; font-weight: 800; font-size: 16px; }
+        .total-amt { color: #d62839; }
+
+        .order-btn { display: block; width: calc(100% - 36px); margin: 10px 18px 0; background: #d62839; color: white; border: none; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; transition: opacity 0.2s; }
+        .order-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* ── CONFIRMATION ── */
+        .confirm-screen { position: fixed; inset: 0; background: white; z-index: 500; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 30px; }
+        .confirm-screen.show { display: flex; }
+        .confirm-icon { font-size: 64px; margin-bottom: 10px; }
+        .big-order-num { font-size: 90px; font-weight: 900; color: #d62839; line-height: 1; }
+        .confirm-h2 { font-size: 22px; font-weight: 800; margin: 14px 0 8px; color: #1a1a2e; }
+        .confirm-p { color: #666; font-size: 14px; line-height: 1.6; }
+        .new-order-btn { margin-top: 36px; background: #1a1a2e; color: white; border: none; padding: 14px 36px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+        /* ── BOTTOM SPACER ── */
+        .bottom-spacer { height: 80px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🍽️ NIE Western</h1>
+    <p>Tap items · Review cart · Place order</p>
+</div>
+
+<div class="tabs-wrap" id="tabs-wrap"></div>
+<div id="menu-container"></div>
+<div class="bottom-spacer"></div>
+
+<!-- Cart Bar -->
+<div class="cart-bar" id="cart-bar">
+    <div class="cart-label">
+        <div class="cart-count-label" id="cart-count-lbl">0 items</div>
+        <div class="cart-price-label" id="cart-price-bar">$0.00</div>
+    </div>
+    <button class="view-btn" onclick="openCart()">View Order →</button>
+</div>
+
+<!-- Cart Sheet -->
+<div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
+    <div class="cart-sheet" id="cart-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+            <div class="sheet-title">Your Order</div>
+        </div>
+        <div class="cart-items-list" id="cart-items-list"></div>
+        <div class="cart-form">
+            <label class="field-label">Table / Queue Number *</label>
+            <input class="field-input" id="table-input" type="text" placeholder="e.g. 12" maxlength="10" inputmode="numeric">
+            <label class="field-label">Special Instructions (optional)</label>
+            <textarea class="field-input" id="note-input" rows="2" placeholder="No chilli · Extra sauce · Any allergy..."></textarea>
+        </div>
+        <div class="total-row">
+            <span>Total</span>
+            <span class="total-amt" id="cart-total-modal">$0.00</span>
+        </div>
+        <button class="order-btn" id="order-btn" onclick="placeOrder()">Place Order</button>
+    </div>
+</div>
+
+<!-- Confirmation -->
+<div class="confirm-screen" id="confirm-screen">
+    <div class="confirm-icon">✅</div>
+    <div class="big-order-num" id="big-order-num">#01</div>
+    <h2 class="confirm-h2">Order Placed!</h2>
+    <p class="confirm-p">Please pay at the counter.<br>Your order number will be called<br>when your food is ready.</p>
+    <button class="new-order-btn" onclick="resetAll()">+ New Order</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, push, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ════════════════════════════════════
+//  FIREBASE CONFIG  — fill in yours
+// ════════════════════════════════════
+const firebaseConfig = {
+    apiKey:            "YOUR_API_KEY",
+    authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL:       "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:         "YOUR_PROJECT_ID",
+    storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId:             "YOUR_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ════════════════════════════════════
+//  BREAKFAST TIME GATE (until 11:15)
+// ════════════════════════════════════
+function isBreakfastTime() {
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    return mins < (11 * 60 + 15);
+}
+
+// ════════════════════════════════════
+//  MENU DATA
+// ════════════════════════════════════
+const MENU = [
+    {
+        id: "mains", label: "🍽️ Mains",
+        items: [
+            { id:"cc",    name:"Chicken Chop",                                        price:4.80 },
+            { id:"ccut",  name:"Chicken Cutlet · fries & salad",                      price:4.80 },
+            { id:"ccsal", name:"Chicken Chop All Salad",                              price:4.80 },
+            { id:"haw",   name:"Hawaiian Chop · mashed & salad",                      price:6.20 },
+            { id:"mex",   name:"Mexican Chop · mashed, salad & nacho cheese sauce",   price:5.50 },
+            { id:"fnc",   name:"Fish & Chips",                                        price:4.80 },
+            { id:"tmp",   name:"Tempura Fish & Chips · salad",                        price:4.80 },
+            { id:"bpr",   name:"Black Pepper Chicken w Rice",                         price:5.00 },
+            { id:"msr",   name:"Mushroom Sauce Chicken w Rice · salad",               price:5.00 },
+            { id:"spb",   name:"Spaghetti Chicken Bolognese",                         price:4.80 },
+            { id:"spm",   name:"Spaghetti Mushroom Cream",                            price:4.80 },
+            { id:"sal",   name:"Salad",                                               price:4.50 },
+            { id:"soup",  name:"Soup of the Day",                                     price:2.00 },
+        ]
+    },
+    {
+        id: "grilled", label: "🐟 Grilled Fish",
+        items: [
+            { id:"gfr",  name:"Grilled Fish Butter Rice · salad",      price:5.00 },
+            { id:"gff",  name:"Grilled Fish W Fries",                  price:5.00 },
+            { id:"gfm",  name:"Grilled Fish W Mashed · salad",         price:5.00 },
+            { id:"gfas", name:"Grilled Fish All Salad",                price:5.00 },
+            { id:"gfcf", name:"Grilled Fish W Cheese Fries · salad",   price:5.70 },
+            { id:"gfsp", name:"Grilled Fish Spaghetti · salad",        price:6.00 },
+        ]
+    },
+    {
+        id: "korean", label: "🍗 Fried Chicken",
+        items: [
+            { id:"swff", name:"Sweet Spicy Korean Fried Chicken · fries",              price:5.50 },
+            { id:"swfr", name:"Sweet Spicy Korean Fried Chicken · rice",               price:5.50 },
+            { id:"swsp", name:"Sweet Spicy Fried Chicken · spaghetti & salad",         price:6.50 },
+            { id:"gsff", name:"Garlic Soya Korean Fried Chicken · fries & salad",      price:5.50 },
+            { id:"gysp", name:"Garlic Soya Fried Chicken · spaghetti",                 price:6.50 },
+            { id:"mxcc", name:"Mexican Chicken Cutlet · fries, salad & nacho cheese",  price:5.50 },
+            { id:"mxfs", name:"Mexican Fish & Chips · salad & nacho cheese",           price:5.50 },
+        ]
+    },
+    {
+        id: "kebab", label: "🌯 Kebab",
+        items: [
+            { id:"ck",   name:"Chicken Kebab",                     price:4.90 },
+            { id:"ckf",  name:"Chicken Kebab · fries",             price:4.90 },
+            { id:"ckr",  name:"Chicken Kebab · rice",              price:4.90 },
+            { id:"cks",  name:"Chicken Kebab · salad",             price:4.90 },
+            { id:"ckc",  name:"Chicken Kebab Combo",               price:5.90 },
+            { id:"bk",   name:"Beef Kebab",                        price:5.90 },
+            { id:"bkf",  name:"Beef Kebab · fries",                price:5.90 },
+            { id:"bkr",  name:"Beef Kebab · rice",                 price:5.90 },
+            { id:"bks",  name:"Beef Kebab · salad",                price:5.90 },
+            { id:"bkc",  name:"Beef Kebab Combo",                  price:6.90 },
+            { id:"mk",   name:"Mixed Kebab (Beef & Chicken)",      price:6.90 },
+            { id:"mkf",  name:"Mixed Kebab · fries",               price:6.90 },
+            { id:"mkr",  name:"Mixed Kebab · rice",                price:6.90 },
+            { id:"koff", name:"Kebab Offer (2 Kebabs)",            price:12.00 },
+        ]
+    },
+    {
+        id: "snacks", label: "🍟 Snacks & Sides",
+        items: [
+            { id:"cf",   name:"Cheese Fries",                price:3.00 },
+            { id:"n6",   name:"6 pcs Nugget",                price:3.00 },
+            { id:"spn",  name:"5pcs Spicy Chicken Nuggets",  price:3.00 },
+            { id:"hb",   name:"3pcs Hash Brown",             price:2.00 },
+            { id:"ccs",  name:"Chicken Cheese Sausage",      price:2.00 },
+            { id:"or",   name:"Onion Ring",                  price:2.00 },
+            { id:"mzz",  name:"Mozz Cheese Sticks",          price:3.50 },
+            { id:"pop",  name:"Popcorn Chicken",             price:3.50 },
+            { id:"swb",  name:"Sandwich",                    price:1.60 },
+            { id:"swwm", name:"Sandwich (Wholemeal)",        price:1.60 },
+        ]
+    },
+    {
+        id: "addons", label: "➕ Add-ons",
+        items: [
+            { id:"ach",  name:"Add Cheese",           price:0.70 },
+            { id:"aeg",  name:"Add Egg",              price:0.70 },
+            { id:"afr",  name:"Add Fries",            price:0.70 },
+            { id:"amp",  name:"Add Mashed Potato",    price:0.70 },
+            { id:"asl",  name:"Add Salad",            price:0.70 },
+            { id:"ari",  name:"Add Rice",             price:0.70 },
+            { id:"asp",  name:"Add Spaghetti",        price:1.50 },
+            { id:"acp",  name:"Add Chicken Chop",     price:3.50 },
+            { id:"acu",  name:"Add Chicken Cutlet",   price:3.50 },
+            { id:"aff",  name:"Add Fried Fish",       price:3.50 },
+            { id:"agf",  name:"Add Grilled Fish",     price:3.80 },
+            { id:"akb",  name:"Add Chicken Kebab",    price:2.00 },
+            { id:"scs",  name:"Small Chicken Sausage",price:0.70 },
+            { id:"taw",  name:"Take Away Box",        price:0.30 },
+        ]
+    },
+    {
+        id: "breakfast", label: "🥞 Breakfast", breakfastOnly: true,
+        items: [
+            { id:"tbs",  name:"Toast Breakfast Set · 2 bread, hashbrown, hotdog & salad",         price:4.00 },
+            { id:"sbs",  name:"Scramble Egg Breakfast Set · 2 bread, hashbrown, hotdog & salad",  price:4.00 },
+            { id:"obs",  name:"Omelette Breakfast Set · 2 bread, hashbrown, hotdog & salad",      price:4.50 },
+            { id:"chbu", name:"Chicken Burger",              price:2.00 },
+            { id:"fibu", name:"Fish Burger",                 price:2.00 },
+            { id:"chhd", name:"Chicken Cheese Hot Dog Bun",  price:2.70 },
+            { id:"ksw",  name:"Korean Sandwich",             price:2.50 },
+            { id:"pas",  name:"Potato Apple Salad",          price:2.80 },
+        ]
+    },
+];
+
+// ════════════════════════════════════
+//  CART STATE
+// ════════════════════════════════════
+let cart = {};
+
+const totalPrice = () => Object.values(cart).reduce((s, i) => s + i.price * i.qty, 0);
+const totalCount = () => Object.values(cart).reduce((s, i) => s + i.qty, 0);
+
+// ════════════════════════════════════
+//  RENDER MENU
+// ════════════════════════════════════
+function renderMenu() {
+    const bfast = isBreakfastTime();
+    const tabs  = document.getElementById("tabs-wrap");
+    const menu  = document.getElementById("menu-container");
+    tabs.innerHTML = "";
+    menu.innerHTML = "";
+
+    if (!bfast) {
+        const b = document.createElement("div");
+        b.className = "bfast-banner";
+        b.innerHTML = "🥞 Breakfast menu available until 11:15 AM daily";
+        menu.appendChild(b);
+    }
+
+    const visible = MENU.filter(c => !c.breakfastOnly || bfast);
+
+    visible.forEach((cat, idx) => {
+        // Tab
+        const tab = document.createElement("div");
+        tab.className = "tab" + (idx === 0 ? " active" : "");
+        tab.textContent = cat.label;
+        tab.dataset.catId = cat.id;
+        tab.onclick = () => scrollToSection(cat.id, tab);
+        tabs.appendChild(tab);
+
+        // Section
+        const sec = document.createElement("div");
+        sec.className = "cat-section";
+        sec.id = "sec-" + cat.id;
+        sec.innerHTML = `<div class="cat-title">${cat.label}</div>`;
+
+        cat.items.forEach(item => {
+            const card = document.createElement("div");
+            card.className = "item-card";
+            card.innerHTML = `
+                <div class="item-info">
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-price">$${item.price.toFixed(2)}</div>
+                </div>
+                <button class="add-btn" data-id="${item.id}" data-name="${item.name}" data-price="${item.price}">+</button>
+            `;
+            sec.appendChild(card);
+        });
+
+        menu.appendChild(sec);
+    });
+
+    // Delegate add button clicks
+    menu.addEventListener("click", e => {
+        const btn = e.target.closest(".add-btn");
+        if (!btn) return;
+        addItem(btn.dataset.id, btn.dataset.name, parseFloat(btn.dataset.price));
+        btn.style.transform = "scale(0.85)";
+        setTimeout(() => btn.style.transform = "", 150);
+    });
+
+    // Scroll spy
+    setupScrollSpy();
+}
+
+function scrollToSection(catId, clickedTab) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    clickedTab.classList.add("active");
+    const sec = document.getElementById("sec-" + catId);
+    if (sec) {
+        const offset = 57 + 44; // header + tabs height
+        const top = sec.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top, behavior: "smooth" });
+    }
+}
+
+function setupScrollSpy() {
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const id = entry.target.id.replace("sec-", "");
+                document.querySelectorAll(".tab").forEach(t => {
+                    t.classList.toggle("active", t.dataset.catId === id);
+                });
+                // Scroll active tab into view
+                const activeTab = document.querySelector(`.tab[data-cat-id="${id}"]`);
+                if (activeTab) activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+            }
+        });
+    }, { rootMargin: "-30% 0px -60% 0px" });
+
+    document.querySelectorAll(".cat-section").forEach(s => observer.observe(s));
+}
+
+// ════════════════════════════════════
+//  CART LOGIC
+// ════════════════════════════════════
+function addItem(id, name, price) {
+    if (cart[id]) cart[id].qty++;
+    else cart[id] = { name, price, qty: 1 };
+    refreshCartBar();
+}
+
+window.changeQty = (id, delta) => {
+    if (!cart[id]) return;
+    cart[id].qty += delta;
+    if (cart[id].qty <= 0) delete cart[id];
+    refreshCartBar();
+    renderCartSheet();
+};
+
+function refreshCartBar() {
+    const cnt = totalCount();
+    const tot = totalPrice();
+    document.getElementById("cart-count-lbl").textContent = cnt + " item" + (cnt !== 1 ? "s" : "");
+    document.getElementById("cart-price-bar").textContent  = "$" + tot.toFixed(2);
+    document.getElementById("cart-total-modal").textContent = "$" + tot.toFixed(2);
+    document.getElementById("cart-bar").classList.toggle("visible", cnt > 0);
+}
+
+window.openCart = () => {
+    renderCartSheet();
+    document.getElementById("overlay").classList.add("open");
+    document.body.style.overflow = "hidden";
+};
+
+window.closeCart = () => {
+    document.getElementById("overlay").classList.remove("open");
+    document.body.style.overflow = "";
+};
+
+window.handleOverlayClick = (e) => {
+    if (e.target === document.getElementById("overlay")) closeCart();
+};
+
+function renderCartSheet() {
+    const list = document.getElementById("cart-items-list");
+    list.innerHTML = "";
+
+    if (!Object.keys(cart).length) {
+        list.innerHTML = `<p style="color:#bbb;text-align:center;padding:24px 0;font-size:14px">Your cart is empty</p>`;
+        return;
+    }
+
+    Object.entries(cart).forEach(([id, item]) => {
+        const row = document.createElement("div");
+        row.className = "cart-row";
+        row.innerHTML = `
+            <div class="qty-ctrl">
+                <button class="qty-btn" onclick="changeQty('${id}',-1)">−</button>
+                <span class="qty-num">${item.qty}</span>
+                <button class="qty-btn" onclick="changeQty('${id}',1)">+</button>
+            </div>
+            <div class="cart-row-name">${item.name}</div>
+            <div class="cart-row-price">$${(item.price * item.qty).toFixed(2)}</div>
+        `;
+        list.appendChild(row);
+    });
+
+    document.getElementById("cart-total-modal").textContent = "$" + totalPrice().toFixed(2);
+}
+
+// ════════════════════════════════════
+//  PLACE ORDER
+// ════════════════════════════════════
+window.placeOrder = async () => {
+    const tableEl = document.getElementById("table-input");
+    const table   = tableEl.value.trim();
+    const note    = document.getElementById("note-input").value.trim();
+
+    if (!table) {
+        tableEl.classList.add("error");
+        tableEl.focus();
+        setTimeout(() => tableEl.classList.remove("error"), 600);
+        return;
+    }
+    if (!Object.keys(cart).length) return;
+
+    const btn = document.getElementById("order-btn");
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+
+    try {
+        // Order number
+        const counterRef = ref(db, "nie_western/order_counter");
+        const snap = await get(counterRef);
+        let num = (snap.exists() ? snap.val() : 0) + 1;
+        if (num > 99) num = 1;
+        await set(counterRef, num);
+
+        const order = {
+            orderNum:  num,
+            table,
+            note,
+            items:     Object.values(cart).map(i => ({ name: i.name, price: i.price, qty: i.qty })),
+            total:     parseFloat(totalPrice().toFixed(2)),
+            status:    "pending",
+            timestamp: Date.now()
+        };
+
+        await push(ref(db, "nie_western/orders"), order);
+
+        closeCart();
+        document.getElementById("big-order-num").textContent = "#" + String(num).padStart(2, "0");
+        document.getElementById("confirm-screen").classList.add("show");
+
+    } catch (err) {
+        console.error(err);
+        alert("Failed to place order. Please check your connection and try again.");
+        btn.disabled = false;
+        btn.textContent = "Place Order";
+    }
+};
+
+window.resetAll = () => {
+    cart = {};
+    document.getElementById("table-input").value = "";
+    document.getElementById("note-input").value  = "";
+    document.getElementById("confirm-screen").classList.remove("show");
+    refreshCartBar();
+};
+
+// ════════════════════════════════════
+//  INIT
+// ════════════════════════════════════
+renderMenu();
+</script>
+</body>
+</html>
