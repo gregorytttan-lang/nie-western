@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Western Food #06 — Flavours Foodcourt</title>
+<title>NIE Western Food</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -35,8 +35,8 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 <div id="view-menu">
   <div style="background:#fff;border-bottom:1px solid #E5E0D8">
     <div style="padding:20px 20px 0">
-      <div class="serif" style="font-size:22px;font-weight:700;color:#1C1917;line-height:1.2">Western Food #06</div>
-      <div style="font-size:13px;color:#C4572A;font-weight:500;margin-top:2px">Flavours Foodcourt</div>
+      <div class="serif" style="font-size:22px;font-weight:700;color:#1C1917;line-height:1.2">NIE Western Food</div>
+      <div style="font-size:13px;color:#C4572A;font-weight:500;margin-top:2px">NIE Canteen</div>
       <div style="font-size:12px;color:#78716C;margin-top:2px;margin-bottom:10px">Self-order · NETS/PayNow · Self-collection</div>
       <div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#92400E;display:flex;align-items:center;gap:8px">
         <span>📞</span>
@@ -136,7 +136,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 <!-- Payment Modal -->
 <div id="pay-modal" class="hidden overlay" style="background:#FAF9F7">
   <div style="max-width:400px;margin:0 auto;padding:32px 24px">
-    <div class="serif" style="font-size:20px;font-weight:700;color:#1C1917;margin-bottom:2px;text-align:center">Western Food #06</div>
+    <div class="serif" style="font-size:20px;font-weight:700;color:#1C1917;margin-bottom:2px;text-align:center">NIE Western Food</div>
     <div style="font-size:13px;color:#78716C;margin-bottom:24px;text-align:center">Complete payment to place your order</div>
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:16px;padding:16px 20px;margin-bottom:20px">
       <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">Order Summary</div>
@@ -197,7 +197,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <div style="font-size:13px;color:#92400E;font-weight:700;line-height:1.5">Take a screenshot now so you don't forget your queue number!</div>
   </div>
   <div style="width:50px;height:2px;background:#E5E0D8;margin:0 auto 20px"></div>
-  <div class="serif" style="font-size:15px;font-weight:600;color:#1C1917;margin-bottom:20px">Western Food #06 — Flavours Foodcourt</div>
+  <div class="serif" style="font-size:15px;font-weight:600;color:#1C1917;margin-bottom:20px">NIE Western Food</div>
   <div id="cash-notice" class="hidden" style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:14px 18px;margin-bottom:20px;max-width:300px;display:flex;align-items:center;gap:12px;text-align:left">
     <span style="font-size:22px;flex-shrink:0">💵</span>
     <div style="font-size:13px;color:#1E40AF;font-weight:600;line-height:1.5">Please proceed to the counter to pay cash. Show this queue number to the staff.</div>
@@ -217,10 +217,10 @@ function tlv(tag,val){const v=String(val);return tag+v.length.toString().padStar
 function crc16(str){let c=0xFFFF;for(let i=0;i<str.length;i++){c^=str.charCodeAt(i)<<8;for(let j=0;j<8;j++){c=(c&0x8000)?((c<<1)^0x1021):(c<<1);c&=0xFFFF;}}return c.toString(16).toUpperCase().padStart(4,"0");}
 function buildPayNowQR(amount){
   const mid=tlv("00","SG.PAYNOW")+tlv("01","2")+tlv("02",PAYNOW_UEN)+tlv("03","1");
-  const body=tlv("00","01")+tlv("01","12")+tlv("26",mid)+tlv("52","0000")+tlv("53","702")+tlv("54",amount.toFixed(2))+tlv("58","SG")+tlv("59","WESTERN FOOD 06")+tlv("60","Singapore")+"6304";
+  const body=tlv("00","01")+tlv("01","12")+tlv("26",mid)+tlv("52","0000")+tlv("53","702")+tlv("54",amount.toFixed(2))+tlv("58","SG")+tlv("59","NIE WESTERN FOOD")+tlv("60","Singapore")+"6304";
   return body+crc16(body);
 }
-const STALL = "Western Food #06 — Flavours Foodcourt";
+const STALL = "NIE Western Food";
 const fmtQ  = n => "#" + String(n).padStart(3,"0");
 const fmtS  = n => "$" + Number(n).toFixed(2);
 
@@ -1087,7 +1087,7 @@ function sendWhatsApp(){
   const topItems = Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const todayPaynow  = todayOrders.filter(o=>o.paymentMethod!=="cash").reduce((s,o)=>s+o.total,0);
   const todayCashAmt = todayOrders.filter(o=>o.paymentMethod==="cash").reduce((s,o)=>s+o.total,0);
-  let msg = "🍽️ *WESTERN FOOD #06*\n📍 Flavours Foodcourt\n";
+  let msg = "🍽️ *NIE WESTERN FOOD*\n📍 NIE Canteen\n";
   msg += "📅 *Daily Sales — " + new Date().toLocaleDateString("en-SG") + "*\n";
   msg += "─────────────────────\n";
   msg += "📦 Orders: *" + todayOrders.length + "*\n";
@@ -1124,7 +1124,7 @@ function buildTicketText(o){
   const dt       = new Date(o.createdAt).toLocaleString("en-SG");
   const payLabel = o.paymentMethod==="cash" ? "CASH" : "PAYNOW";
   let t = "";
-  t += ALIGN_C + BOLD_ON + NORMAL + "WESTERN FOOD #06" + LF + "Flavours Foodcourt" + LF + BOLD_OFF;
+  t += ALIGN_C + BOLD_ON + NORMAL + "NIE WESTERN FOOD" + LF + "NIE Canteen" + LF + BOLD_OFF;
   t += "------------------------------------------------" + LF;
   t += ALIGN_C + DOUBLE_HW + BOLD_ON + payLabel + LF + NORMAL + BOLD_OFF;
   t += "------------------------------------------------" + LF;
@@ -1161,7 +1161,7 @@ function printTicket(o){ rawbtPrint(buildTicketText(o)); }
 function connectPrinter(){
   const btn = document.getElementById("bt-btn");
   const sta = document.getElementById("bt-status");
-  rawbtPrint("================================\n     WESTERN FOOD #06\n     Flavours Foodcourt\n================================\n   ** PRINTER TEST OK **\n================================\n\n\n");
+  rawbtPrint("================================\n     NIE WESTERN FOOD\n     NIE Canteen\n================================\n   ** PRINTER TEST OK **\n================================\n\n\n");
   btn.textContent = "✅ Test Sent"; btn.style.background = "#16A34A";
   if(sta) sta.textContent = "Check if printer printed the test. If yes, ready!";
   printerConnected = true;
