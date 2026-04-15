@@ -1169,7 +1169,13 @@ function connectPrinter(){
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 const FB_CONFIG = {
-  databaseURL: "https://quickpos-w06-default-rtdb.asia-southeast1.firebasedatabase.app"
+  apiKey:            "AIzaSyBrHuYcjnClmxjzA2RITIVuJQ-LwCCC47E",
+  authDomain:        "nie-western-pos.firebaseapp.com",
+  databaseURL:       "https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "nie-western-pos",
+  storageBucket:     "nie-western-pos.firebasestorage.app",
+  messagingSenderId: "268409247520",
+  appId:             "1:268409247520:web:e8a911d37ec031c50ba945"
 };
 firebase.initializeApp(FB_CONFIG);
 const db = firebase.database();
