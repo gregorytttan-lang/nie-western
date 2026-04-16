@@ -475,6 +475,8 @@ const DEFAULT_MENU = [
 
 
 // ── STATE ───────────────────────────────────────────────────────────────────
+// Clear old cache versions
+if(localStorage.getItem("menu_nie_v1")) localStorage.removeItem("menu_nie_v1");
 let menu    = ls("menu_nie_v2", DEFAULT_MENU);
 let orders  = [];
 let cart    = [];
