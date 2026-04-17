@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v11</title>
+<title>NIE Western Food v12</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -476,8 +476,8 @@ const DEFAULT_MENU = [
 
 // ── STATE ───────────────────────────────────────────────────────────────────
 // Clear ALL old cache versions - force fresh menu
-["menu_nie_v1","menu_nie_v2","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
-let menu    = ls("menu_nie_v4", DEFAULT_MENU);
+["menu_nie_v1","menu_nie_v2","menu_nie_v3","menu_nie_v4","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
+let menu    = ls("menu_nie_v5", DEFAULT_MENU);
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
@@ -488,7 +488,7 @@ let modChoices = {};
 let pendingOrder = null;
 let diningOption = null; // null = not yet selected
 
-function saveMenu()  { lss("menu_nie_v4", menu); }
+function saveMenu()  { lss("menu_nie_v5", menu); }
 function saveOrders(){ /* orders saved to Firebase */ }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
