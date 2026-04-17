@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v7</title>
+<title>NIE Western Food v8</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -967,6 +967,10 @@ async function confirmPayment(paymentMethod='paynow'){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     orders.push(o);
     saveOrderToFB(o);  // Save to Firebase for sales reporting
+    // Also save to localStorage as backup (in case Firebase is slow/offline)
+    const snacksBackup = ls("snacks_orders_nie", []);
+    snacksBackup.push(o);
+    lss("snacks_orders_nie", snacksBackup);
     cart = []; pendingOrder = null;
     closePayment();
     document.getElementById("queue-number").textContent = "🎉";
@@ -1227,7 +1231,11 @@ function resetMenu(){ menu=DEFAULT_MENU; saveMenu(); renderAdminMenu(); }
 
 function renderReports(){
   const todayStr = today();
-  const todayOrders = orders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
+  // Merge Firebase orders with any locally saved snacks orders
+  const localSnacks = ls("snacks_orders_nie", []);
+  const allOrders = [...orders];
+  localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
   const todayRev      = todayOrders.reduce((s,o)=>s+o.total,0);
   const todayPaynow   = todayOrders.filter(o=>o.paymentMethod!=="cash").reduce((s,o)=>s+o.total,0);
   const todayCash     = todayOrders.filter(o=>o.paymentMethod==="cash").reduce((s,o)=>s+o.total,0);
@@ -1536,7 +1544,11 @@ function saveFloat(val){
 
 function saveDailyToSheets(){
   const todayStr = today();
-  const todayOrders = orders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
+  // Merge Firebase orders with locally saved snacks orders
+  const localSnacks = ls("snacks_orders_nie", []);
+  const allOrders = [...orders];
+  localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
   if(!todayOrders.length){ toast("No orders today to save.","#78716C"); return; }
 
   // Disable button and show loading
@@ -1608,7 +1620,10 @@ function savePayoutToSheets(p){
 
 function sendWhatsApp(){
   const todayStr = today();
-  const todayOrders = orders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
+  const localSnacks = ls("snacks_orders_nie", []);
+  const allOrders = [...orders];
+  localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
   const todayRev = todayOrders.reduce((s,o)=>s+o.total,0);
   const itemMap = {};
   todayOrders.forEach(o=>o.items.forEach(i=>{
