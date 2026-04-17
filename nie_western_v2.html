@@ -960,24 +960,26 @@ async function confirmPayment(paymentMethod='paynow'){
 
   const needsKitchen = orderNeedsKitchen();
   const snacksOnly = !needsKitchen && isSnacksOnly();
+  let o;
 
   // Snacks-only: no queue number, no kitchen, just thank you
   if(snacksOnly){
-    const o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
+    o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     orders.push(o);
-    // Still log to Google Sheets for sales tracking
     sendToSheets(o);
     cart = []; pendingOrder = null;
     closePayment();
-    // Show Thank You screen instead of queue number
     document.getElementById("queue-number").textContent = "✅";
     document.getElementById("queue-dining").textContent = "";
     const statusBar = document.getElementById("order-status-bar");
-    statusBar.innerHTML = '<div style="text-align:center;padding:20px 0"><div style="font-size:60px;margin-bottom:12px">🎉</div><div style="font-size:22px;font-weight:700;color:#16A34A;margin-bottom:8px">Thank You!</div><div style="font-size:14px;color:#78716C">Please collect your snacks at the counter</div></div>';
+    if(statusBar) statusBar.innerHTML = '<div style="text-align:center;padding:20px 0"><div style="font-size:60px;margin-bottom:12px">🎉</div><div style="font-size:22px;font-weight:700;color:#16A34A;margin-bottom:8px">Thank You!</div><div style="font-size:14px;color:#78716C">Please collect your snacks at the counter</div></div>';
+    // Hide tracking & cash notice for snacks
+    const trackEl = document.getElementById("order-tracking");
+    if(trackEl) trackEl.style.display="none";
   } else {
     // Normal flow: queue number + kitchen
     const queueNo = await nextQ();
-    const o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
+    o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
     orders.push(o);
     saveOrderToFB(o);
     cart = []; pendingOrder = null;
