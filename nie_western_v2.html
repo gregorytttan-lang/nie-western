@@ -539,8 +539,14 @@ function showView(v){
 }
 
 // ── MENU ────────────────────────────────────────────────────────────────────
+let snacksInitDone = false;
 function renderMenu(){
   const avail = menu.map(c=>({...c,items:c.items.filter(i=>i.avail!==false)})).filter(c=>c.items.length);
+  // Auto-switch to Snacks tab on first load if ?snacks=1
+  if(isSnacksMode && !snacksInitDone){
+    const si = avail.findIndex(c=>c.id==='c5');
+    if(si>=0){ curCat=si; snacksInitDone=true; }
+  }
   // Tabs
   const tabs = document.getElementById("cat-tabs");
   tabs.innerHTML = avail.map((c,i)=>`
@@ -585,11 +591,7 @@ function renderMenu(){
 
 function switchCat(i){ curCat=i; renderMenu(); }
 
-// Auto-switch to Snacks tab if ?snacks=1
-if(isSnacksMode){
-  const snacksCatIdx = menu.map(c=>({...c,items:c.items.filter(i=>i.avail!==false)})).filter(c=>c.items.length).findIndex(c=>c.id==='c5');
-  if(snacksCatIdx>=0){ curCat=snacksCatIdx; renderMenu(); }
-}
+// Snacks auto-switch handled in renderMenu
 
 function getItem(id){ for(const c of menu) for(const i of c.items) if(i.id===id) return i; return null; }
 
