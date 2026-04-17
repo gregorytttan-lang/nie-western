@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v8</title>
+<title>NIE Western Food v9</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -966,11 +966,27 @@ async function confirmPayment(paymentMethod='paynow'){
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     orders.push(o);
-    saveOrderToFB(o);  // Save to Firebase for sales reporting
-    // Also save to localStorage as backup (in case Firebase is slow/offline)
-    const snacksBackup = ls("snacks_orders_nie", []);
-    snacksBackup.push(o);
-    lss("snacks_orders_nie", snacksBackup);
+    saveOrderToFB(o);  // Save to Firebase
+    // Send directly to Google Sheets immediately (most reliable for snacks)
+    try {
+      const itemMap = {};
+      o.items.forEach(i=>{ if(!itemMap[i.name]) itemMap[i.name]=0; itemMap[i.name]+=i.qty; });
+      const topItems = Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>n+" x"+q);
+      const snacksData = {
+        type:"daily",
+        date: new Date().toLocaleDateString("en-SG"),
+        totalRevenue: o.total,
+        paynow: paymentMethod!=="cash" ? o.total : 0,
+        cash: paymentMethod==="cash" ? o.total : 0,
+        orders: 1,
+        dineIn: 1, takeAway: 0,
+        float: 0, payoutTotal: 0, cashInBox: 0,
+        top1:topItems[0]||"", top2:topItems[1]||"", top3:topItems[2]||"",
+        top4:topItems[3]||"", top5:topItems[4]||"",
+        note: "Snacks order"
+      };
+      fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(snacksData)}).catch(()=>{});
+    } catch(e){}
     cart = []; pendingOrder = null;
     closePayment();
     document.getElementById("queue-number").textContent = "🎉";
