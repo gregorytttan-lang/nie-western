@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v4</title>
+<title>NIE Western Food v5</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -968,13 +968,8 @@ async function confirmPayment(paymentMethod='paynow'){
     orders.push(o);
     cart = []; pendingOrder = null;
     closePayment();
-    document.getElementById("queue-number").textContent = "✅";
-    document.getElementById("queue-dining").textContent = "";
-    const statusBar = document.getElementById("order-status-bar");
-    if(statusBar) statusBar.innerHTML = '<div style="text-align:center;padding:20px 0"><div style="font-size:60px;margin-bottom:12px">🎉</div><div style="font-size:22px;font-weight:700;color:#16A34A;margin-bottom:8px">Thank You!</div><div style="font-size:14px;color:#78716C">Please collect your snacks at the counter</div></div>';
-    // Hide tracking & cash notice for snacks
-    const trackEl = document.getElementById("order-tracking");
-    if(trackEl) trackEl.style.display="none";
+    document.getElementById("queue-number").textContent = "🎉";
+    document.getElementById("queue-dining").textContent = "Thank You!";
   } else {
     // Normal flow: queue number + kitchen
     const queueNo = await nextQ();
