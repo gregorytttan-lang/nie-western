@@ -966,7 +966,6 @@ async function confirmPayment(paymentMethod='paynow'){
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     orders.push(o);
-    sendToSheets(o);
     cart = []; pendingOrder = null;
     closePayment();
     document.getElementById("queue-number").textContent = "✅";
