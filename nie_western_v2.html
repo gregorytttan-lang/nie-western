@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v14</title>
+<title>NIE Western Food v15</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2213,23 +2213,23 @@ let speechEnabled = true;
 
 function playBeep(){
   try{
-    // 3 loud long beeps
-    [0, 600, 1200].forEach(delay=>{
+    // 10 loud long beeps
+    for(let i=0; i<10; i++){
       setTimeout(()=>{
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.type = "square"; // louder/harsher tone
+        osc.type = "square";
         osc.frequency.value = 1000;
-        gain.gain.setValueAtTime(2.0, ctx.currentTime); // max volume
+        gain.gain.setValueAtTime(2.0, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
         osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.5); // 500ms each beep
+        osc.stop(ctx.currentTime + 0.5);
         setTimeout(()=>ctx.close(), 700);
-      }, delay);
-    });
+      }, i * 700);
+    }
   } catch(e){ console.log("Beep error:", e); }
 }
 
