@@ -140,9 +140,9 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <div style="font-size:12px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Special Remarks (Optional)</div>
       <textarea id="order-remarks" placeholder="e.g. No sauce, less spicy, no onions..." style="width:100%;padding:10px 12px;border:1px solid #E5E0D8;border-radius:8px;font-size:13px;background:#fff;outline:none;resize:none;height:70px;font-family:'DM Sans',sans-serif;color:#1C1917"></textarea>
     </div>
-    <div style="margin-top:16px;padding:16px;background:#F5F3F0;border-radius:12px;border:1px solid #E5E0D8">
+    <div id="dining-section" style="margin-top:16px;padding:16px;background:#F5F3F0;border-radius:12px;border:1px solid #E5E0D8" id="dining-wrapper">
       <div style="font-size:12px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Dining Option</div>
-      <div style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:12px">* Please select one to continue</div>
+      <div id="dining-required" style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:12px">* Please select one to continue</div>
       <div style="display:flex;gap:10px">
         <button id="opt-dinein" onclick="setDining('dinein')" style="flex:1;padding:14px;border-radius:12px;background:#fff;color:#78716C;border:2px solid #E5E0D8;font-size:14px;font-weight:400;transition:all 0.15s">
           🍽️ Dine In
@@ -481,6 +481,8 @@ let menu    = ls("menu_nie_v3", DEFAULT_MENU);
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
+const urlParams = new URLSearchParams(window.location.search);
+const isSnacksMode = urlParams.get('snacks') === '1';
 let modItem = null;
 let modChoices = {};
 let pendingOrder = null;
@@ -581,7 +583,12 @@ function renderMenu(){
   updateCartFab();
 }
 
-function switchCat(i){ curCat=i; renderMenu(); }
+function switchCat(i){ curCat=i; renderMenu();
+// Auto-switch to Snacks tab if ?snacks=1
+if(isSnacksMode){
+  const snacksCatIdx = menu.map(c=>({...c,items:c.items.filter(i=>i.avail!==false)})).filter(c=>c.items.length).findIndex(c=>c.id==='c5');
+  if(snacksCatIdx>=0){ curCat=snacksCatIdx; renderMenu(); }
+} }
 
 function getItem(id){ for(const c of menu) for(const i of c.items) if(i.id===id) return i; return null; }
 
@@ -668,6 +675,11 @@ function isMain(id){
 function orderNeedsKitchen(){
   // Goes to kitchen if cart has any main OR any add-on item
   return cart.some(x=>isMain(x.id) || isAddon(x.id));
+}
+
+function isSnacksOnly(){
+  // Returns true if cart has ONLY snack items from Snacks & Sides category
+  return cart.length > 0 && cart.every(x => isSnackOnly(x.id));
 }
 
 function takeawayCharge(){
@@ -827,6 +839,18 @@ function skipSides(){
 function openCart(){
   diningOption = null;
   renderCartModal();
+  // Hide dining option for snacks-only orders
+  const dw = document.getElementById("dining-wrapper");
+  const payBtn = document.getElementById("pay-now-btn");
+  if(dw){
+    if(isSnacksOnly()){
+      dw.style.display="none";
+      diningOption="dinein"; // auto-set so payment works
+      if(payBtn){ payBtn.disabled=false; payBtn.style.background="#C4572A"; payBtn.style.cursor="pointer"; payBtn.style.opacity="1"; }
+    } else {
+      dw.style.display="block";
+    }
+  }
   const m = document.getElementById("cart-modal");
   m.classList.remove("hidden"); m.style.display="flex";
 }
@@ -869,6 +893,10 @@ function renderCartModal(){
 // ── PAYMENT ──────────────────────────────────────────────────────────────────
 function proceedToPayment(){
   if(!cart.length) return;
+  // Skip dining option for snacks-only orders
+  if(isSnacksOnly()){
+    diningOption = 'dinein';  // default, won't be shown
+  }
   if(!diningOption){ alert("Please select Dine In or Take Away first."); return; }
   const remarks = document.getElementById("order-remarks").value.trim();
   pendingOrder = {id:uid(), items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
@@ -927,27 +955,32 @@ async function confirmPayment(paymentMethod='paynow'){
   if(btn1){ btn1.textContent="⏳ Processing..."; btn1.disabled=true; }
   if(btn2){ btn2.textContent="⏳ Processing..."; btn2.disabled=true; }
 
-  const queueNo = await nextQ();
   const needsKitchen = orderNeedsKitchen();
-  const o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
-  orders.push(o);
-  saveOrderToFB(o);
-  // Printing handled automatically on kitchen tablet via Firebase listener
-  cart = []; pendingOrder = null;
-  closePayment();
-  document.getElementById("queue-number").textContent = fmtQ(queueNo);
-  document.getElementById("queue-dining").textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
+  const snacksOnly = !needsKitchen && isSnacksOnly();
 
-  // Show different status for snacks-only vs kitchen orders
-  const statusBar = document.getElementById("order-status-bar");
-  if(!needsKitchen){
-    statusBar.innerHTML = `
-      <div style="text-align:center;padding:10px 0">
-        <div style="font-size:40px;margin-bottom:8px">⚡</div>
-        <div style="font-size:16px;font-weight:700;color:#16A34A;margin-bottom:4px">Ready to Collect Now!</div>
-        <div style="font-size:12px;color:#78716C">Your snacks are ready — please collect at the counter</div>
-      </div>`;
+  // Snacks-only: no queue number, no kitchen, just thank you
+  if(snacksOnly){
+    const o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
+    orders.push(o);
+    // Still log to Google Sheets for sales tracking
+    sendToSheets(o);
+    cart = []; pendingOrder = null;
+    closePayment();
+    // Show Thank You screen instead of queue number
+    document.getElementById("queue-number").textContent = "✅";
+    document.getElementById("queue-dining").textContent = "";
+    const statusBar = document.getElementById("order-status-bar");
+    statusBar.innerHTML = '<div style="text-align:center;padding:20px 0"><div style="font-size:60px;margin-bottom:12px">🎉</div><div style="font-size:22px;font-weight:700;color:#16A34A;margin-bottom:8px">Thank You!</div><div style="font-size:14px;color:#78716C">Please collect your snacks at the counter</div></div>';
   } else {
+    // Normal flow: queue number + kitchen
+    const queueNo = await nextQ();
+    const o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
+    orders.push(o);
+    saveOrderToFB(o);
+    cart = []; pendingOrder = null;
+    closePayment();
+    document.getElementById("queue-number").textContent = fmtQ(queueNo);
+    document.getElementById("queue-dining").textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
     updateStatusUI("paid");
     startTrackingOrder(o.id);
   }
