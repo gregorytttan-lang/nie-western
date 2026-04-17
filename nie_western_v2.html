@@ -477,7 +477,7 @@ const DEFAULT_MENU = [
 // ── STATE ───────────────────────────────────────────────────────────────────
 // Clear ALL old cache versions - force fresh menu
 ["menu_nie_v1","menu_nie_v2","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
-let menu    = ls("menu_nie_v3", DEFAULT_MENU);
+let menu    = ls("menu_nie_v4", DEFAULT_MENU);
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
@@ -488,7 +488,7 @@ let modChoices = {};
 let pendingOrder = null;
 let diningOption = null; // null = not yet selected
 
-function saveMenu()  { lss("menu_nie_v3", menu); }
+function saveMenu()  { lss("menu_nie_v4", menu); }
 function saveOrders(){ /* orders saved to Firebase */ }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
@@ -583,12 +583,13 @@ function renderMenu(){
   updateCartFab();
 }
 
-function switchCat(i){ curCat=i; renderMenu();
+function switchCat(i){ curCat=i; renderMenu(); }
+
 // Auto-switch to Snacks tab if ?snacks=1
 if(isSnacksMode){
   const snacksCatIdx = menu.map(c=>({...c,items:c.items.filter(i=>i.avail!==false)})).filter(c=>c.items.length).findIndex(c=>c.id==='c5');
   if(snacksCatIdx>=0){ curCat=snacksCatIdx; renderMenu(); }
-} }
+}
 
 function getItem(id){ for(const c of menu) for(const i of c.items) if(i.id===id) return i; return null; }
 
