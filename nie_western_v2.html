@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v9</title>
+<title>NIE Western Food v10</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -842,16 +842,18 @@ function skipSides(){
 function openCart(){
   diningOption = null;
   renderCartModal();
-  // Hide dining option for snacks-only orders
+  // Always re-check dining option visibility
   const dw = document.getElementById("dining-wrapper");
   const payBtn = document.getElementById("pay-now-btn");
   if(dw){
     if(isSnacksOnly()){
       dw.style.display="none";
-      diningOption="dinein"; // auto-set so payment works
+      diningOption="dinein";
       if(payBtn){ payBtn.disabled=false; payBtn.style.background="#C4572A"; payBtn.style.cursor="pointer"; payBtn.style.opacity="1"; }
     } else {
-      dw.style.display="block";
+      dw.style.display="";
+      // Reset pay button for normal orders - requires dining selection
+      if(payBtn){ payBtn.disabled=true; payBtn.style.background="#D4CFC8"; payBtn.style.cursor="not-allowed"; payBtn.style.opacity="0.6"; }
     }
   }
   const m = document.getElementById("cart-modal");
@@ -948,6 +950,11 @@ function closePayment(){
   const m = document.getElementById("pay-modal");
   m.classList.add("hidden"); m.style.display="none";
   pendingOrder = null;
+  // Reset payment buttons for next order
+  const btn1 = document.querySelector("button[onclick="confirmPayment('paynow')"]");
+  const btn2 = document.querySelector("button[onclick="confirmPayment('cash')"]");
+  if(btn1){ btn1.textContent="✅ I Have Paid — Get Queue Number"; btn1.disabled=false; btn1.style.opacity="1"; }
+  if(btn2){ btn2.textContent="💵 Pay by Cash at Counter"; btn2.disabled=false; btn2.style.opacity="1"; }
 }
 
 async function confirmPayment(paymentMethod='paynow'){
