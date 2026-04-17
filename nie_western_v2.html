@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v6</title>
+<title>NIE Western Food v7</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -966,6 +966,7 @@ async function confirmPayment(paymentMethod='paynow'){
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     orders.push(o);
+    saveOrderToFB(o);  // Save to Firebase for sales reporting
     cart = []; pendingOrder = null;
     closePayment();
     document.getElementById("queue-number").textContent = "🎉";
