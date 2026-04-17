@@ -475,9 +475,9 @@ const DEFAULT_MENU = [
 
 
 // ── STATE ───────────────────────────────────────────────────────────────────
-// Clear old cache versions
-if(localStorage.getItem("menu_nie_v1")) localStorage.removeItem("menu_nie_v1");
-let menu    = ls("menu_nie_v2", DEFAULT_MENU);
+// Clear ALL old cache versions - force fresh menu
+["menu_nie_v1","menu_nie_v2","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
+let menu    = ls("menu_nie_v3", DEFAULT_MENU);
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
@@ -486,7 +486,7 @@ let modChoices = {};
 let pendingOrder = null;
 let diningOption = null; // null = not yet selected
 
-function saveMenu()  { lss("menu_nie_v2", menu); }
+function saveMenu()  { lss("menu_nie_v3", menu); }
 function saveOrders(){ /* orders saved to Firebase */ }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
