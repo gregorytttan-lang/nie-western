@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v10</title>
+<title>NIE Western Food v11</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -218,8 +218,8 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <span style="font-size:22px;flex-shrink:0">📱</span>
       <div style="font-size:13px;color:#991B1B;font-weight:500;line-height:1.5">Screenshot your bank payment confirmation — show it when collecting your food</div>
     </div>
-    <button onclick="confirmPayment('paynow')" style="background:#16A34A;color:#fff;border-radius:14px;padding:18px;font-size:17px;font-weight:600;width:100%;margin-bottom:12px">✅ I Have Paid — Get Queue Number</button>
-    <button onclick="confirmPayment('cash')" style="background:#2563EB;color:#fff;border-radius:14px;padding:18px;font-size:17px;font-weight:600;width:100%;margin-bottom:12px">💵 Pay by Cash at Counter</button>
+    <button id="btn-paynow" onclick="confirmPayment('paynow')" style="background:#16A34A;color:#fff;border-radius:14px;padding:18px;font-size:17px;font-weight:600;width:100%;margin-bottom:12px">✅ I Have Paid — Get Queue Number</button>
+    <button id="btn-cash" onclick="confirmPayment('cash')" style="background:#2563EB;color:#fff;border-radius:14px;padding:18px;font-size:17px;font-weight:600;width:100%;margin-bottom:12px">💵 Pay by Cash at Counter</button>
     <button onclick="closePayment()" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:10px;padding:10px;font-size:13px;width:100%">← Back to Menu</button>
   </div>
 </div>
@@ -951,10 +951,10 @@ function closePayment(){
   m.classList.add("hidden"); m.style.display="none";
   pendingOrder = null;
   // Reset payment buttons for next order
-  const btn1 = document.querySelector("button[onclick="confirmPayment('paynow')"]");
-  const btn2 = document.querySelector("button[onclick="confirmPayment('cash')"]");
-  if(btn1){ btn1.textContent="✅ I Have Paid — Get Queue Number"; btn1.disabled=false; btn1.style.opacity="1"; }
-  if(btn2){ btn2.textContent="💵 Pay by Cash at Counter"; btn2.disabled=false; btn2.style.opacity="1"; }
+  const bp = document.getElementById("btn-paynow");
+  const bc = document.getElementById("btn-cash");
+  if(bp){ bp.textContent="✅ I Have Paid — Get Queue Number"; bp.disabled=false; bp.style.opacity="1"; bp.style.background="#16A34A"; }
+  if(bc){ bc.textContent="💵 Pay by Cash at Counter"; bc.disabled=false; bc.style.opacity="1"; bc.style.background="#2563EB"; }
 }
 
 async function confirmPayment(paymentMethod='paynow'){
