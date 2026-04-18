@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v31</title>
+<title>NIE Western Food v32</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -323,22 +323,14 @@ const fmtS  = n => "$" + Number(n).toFixed(2);
 function screenshotQR(){
   const canvas = document.querySelector('#dynamic-qr canvas');
   if(!canvas){ toast("QR not ready, please try again","#DC2626"); return; }
-  canvas.toBlob(async (blob)=>{
-    const file = new File([blob], 'paynow-qr.png', {type:'image/png'});
-    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-      try{ await navigator.share({files:[file], title:'PayNow QR'}); }
-      catch(e){ if(e.name!=='AbortError') fallbackDownload(canvas); }
-    } else {
-      fallbackDownload(canvas);
-    }
-  });
-}
-function fallbackDownload(canvas){
+  // Save directly to downloads — shows in gallery on Android
   const a = document.createElement('a');
   a.href = canvas.toDataURL('image/png');
-  a.download = 'paynow-qr.png';
+  a.download = 'PayNow-QR.png';
+  document.body.appendChild(a);
   a.click();
-  toast("QR saved! Open bank app and scan from gallery 📂");
+  document.body.removeChild(a);
+  toast("✅ QR saved! Check your Downloads or Gallery 📂", "#16A34A");
 }
 function toast(msg, color){
   color = color || "#16A34A";
