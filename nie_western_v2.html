@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v24</title>
+<title>NIE Western Food v25</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2122,7 +2122,8 @@ function buildTicketText(o){
 }
 function printAllOrders(){
   const active = orders.filter(o=>o.status!=="collected");
-  const unprinted = active.filter(o=>!o.bulkPrinted);
+  // Exclude snacks-only orders from printing
+  const unprinted = active.filter(o=>!o.bulkPrinted && !o.snacksOnly);
   if(!unprinted.length){ toast("No new orders to print.","#78716C"); return; }
   // Sort by queue number so tickets print in order #001, #002, #003...
   unprinted.sort((a,b)=>a.queueNo - b.queueNo);
@@ -2130,8 +2131,8 @@ function printAllOrders(){
   // Combine all unprinted tickets into one print job
   const combined = unprinted.map(o=>buildTicketText(o)).join("");
   rawbtPrint(combined);
-  // Mark all as bulk printed in Firebase
-  unprinted.forEach(o=>{
+  // Mark all as bulk printed in Firebase (including snacks so they don't re-appear)
+  active.filter(o=>!o.bulkPrinted).forEach(o=>{
     ordersRef.child(o.id).update({bulkPrinted: true});
   });
 }
