@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v18</title>
+<title>NIE Western Food v19</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2027,33 +2027,32 @@ function initAutoPrintToggle(){
 }
 
 function rawbtPrint(text, isAuto=false){
-  const port = ls("rawbt_port_nie", "8080");
-  // Always try HTTP API first — no popup, works for auto-print
-  fetch("http://localhost:" + port + "/rawbt", {
-    method: "POST",
-    headers: {"Content-Type": "text/plain; charset=utf-8"},
-    body: text
-  }).then(r=>{
-    if(!r.ok) throw new Error("HTTP " + r.status);
-  }).catch(()=>{
-    if(!isAuto){
-      // Manual print only: fallback to intent (shows popup but user is present)
-      try{
-        const url = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
-        const a = document.createElement("a");
-        a.href = url; a.style.display="none"; a.target="_blank";
-        document.body.appendChild(a); a.click();
-        setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
-      } catch(e){}
-    } else {
-      // Auto-print: silently retry via HTTP after 2s
-      setTimeout(()=>{
-        fetch("http://localhost:" + port + "/rawbt", {
-          method:"POST", headers:{"Content-Type":"text/plain; charset=utf-8"}, body:text
-        }).catch(()=>{});
-      }, 2000);
-    }
-  });
+  // Use WebSocket API (port 40213) — free, no popup, works for auto-print
+  try{
+    const encoded = unescape(encodeURIComponent(text));
+    const bytes = new Uint8Array(encoded.length);
+    for(let i=0;i<encoded.length;i++) bytes[i]=encoded.charCodeAt(i);
+    const ws = new WebSocket("ws://localhost:40213/");
+    ws.binaryType = "arraybuffer";
+    ws.onerror = ()=>{
+      // WebSocket failed — fallback to intent (manual only, shows popup)
+      if(!isAuto){
+        try{
+          const url = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
+          const a = document.createElement("a");
+          a.href=url; a.style.display="none"; a.target="_blank";
+          document.body.appendChild(a); a.click();
+          setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
+        } catch(e){}
+      }
+    };
+    ws.onopen = ()=>{
+      ws.send(bytes.buffer);
+      ws.close(1000, "done");
+    };
+  } catch(e){
+    console.error("Print error:", e);
+  }
 }
 
 function buildTicketText(o){
