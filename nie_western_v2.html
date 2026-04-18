@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v25</title>
+<title>NIE Western Food v27</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -403,6 +403,11 @@ const SIDE = {id:"side",label:"🍽️ Want to add a side?",required:false,multi
   {name:"+ Sunny Side Up Egg",price:0.70},
 ]};
 
+const SAUCE = {id:"sauce",label:"🍝 Choose your Spaghetti Sauce",required:true,options:[
+  {name:"Chicken Bolognese",price:0},
+  {name:"Mushroom Cream",price:0},
+]};
+
 const DEFAULT_MENU = [
   {id:"c1",name:"Shawarma",emoji:"🌯",items:[
     {id:"sh1",name:"Mixed Shawarma Combo (Rice & Fries)",price:6.90,desc:"Go all out — beef, chicken, fluffy rice and crispy fries."},
@@ -438,13 +443,13 @@ const DEFAULT_MENU = [
     {id:"m15",name:"Cheese Fries",price:3.00,desc:"Crispy golden fries smothered in warm gooey cheese sauce."},
   ]},
   {id:"c3",name:"Fish Mains",emoji:"🐟",items:[
-    {id:"f1",name:"Grilled Fish (Spaghetti & Salad)",price:6.00,desc:"Grilled fish meets spaghetti — a surprisingly satisfying pair.",modifiers:[SIDE]},
+    {id:"f1",name:"Grilled Fish (Spaghetti & Salad)",price:6.00,desc:"Grilled fish meets spaghetti — a surprisingly satisfying pair.",modifiers:[SAUCE,SIDE]},
     {id:"f2",name:"Grilled Fish (Cheese Fries & Salad)",price:5.70,desc:"Grilled fish gets a cheesy upgrade — served with loaded cheese fries.",modifiers:[SIDE]},
     {id:"f3",name:"Mexican Fish & Chips (Salad & Nacho Cheese)",price:5.50,desc:"Crispy fish and chips with a fun nacho cheese kick on it.",modifiers:[SIDE]},
     {id:"f4",name:"Grilled Fish (Fries & Salad)",price:5.00,desc:"Tender grilled fish paired with crispy fries and a fresh salad.",modifiers:[SIDE]},
     {id:"f5",name:"Grilled Fish (Mashed Potato & Salad)",price:5.00,desc:"Soft grilled fish served with creamy mash and a garden salad.",modifiers:[SIDE]},
     {id:"f6",name:"Grilled Fish Butter Rice (Salad)",price:5.00,desc:"Fragrant buttery rice topped with tender well-seasoned grilled fish.",modifiers:[SIDE]},
-    {id:"f7",name:"Grilled Fish (Spaghetti)",price:5.00,desc:"Light healthy grilled fish served with your choice of spaghetti sauce.",modifiers:[SIDE]},
+    {id:"f7",name:"Grilled Fish (Spaghetti)",price:5.00,desc:"Light healthy grilled fish served with your choice of spaghetti sauce.",modifiers:[SAUCE,SIDE]},
     {id:"f8",name:"Fish & Chips",price:4.80,desc:"Classic crispy fish with golden fries — a timeless combo.",modifiers:[SIDE]},
     {id:"f9",name:"Tempura Fish & Chips (Salad)",price:4.80,desc:"Light airy tempura batter, golden fries and a fresh side salad.",modifiers:[SIDE]},
     {id:"f10",name:"Garden Salad",price:4.50,desc:"Fresh crisp greens tossed lightly — clean and refreshing."},
@@ -654,8 +659,8 @@ function handleAdd(id){
     ];
 
     const filteredItem = {...item, modifiers: item.modifiers
-    .filter(m=> m.id==="side" && sideOn)
-    .map(m=>({...m, options: sideOptions}))};
+    .filter(m=> (m.id==="side" && sideOn) || m.id==="sauce")
+    .map(m=> m.id==="side" ? {...m, options: sideOptions} : m)};
 
     if(filteredItem.modifiers.length>0){
       modItem = filteredItem; modChoices = {};
