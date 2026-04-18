@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v20</title>
+<title>NIE Western Food v21</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2027,37 +2027,45 @@ function initAutoPrintToggle(){
 }
 
 function rawbtPrint(text, isAuto=false){
-  // Try WebSocket API first (Server for RawBT, port 40213) — no popup
-  let wsDone = false;
+  let done = false;
+
+  function tryIntent(){
+    if(done) return;
+    done = true;
+    try{
+      const url = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
+      const a = document.createElement("a");
+      a.href=url; a.style.display="none"; a.target="_blank";
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
+    } catch(e){ console.error("Intent print error:", e); }
+  }
+
+  // Method 1: WebSocket port 40213 (Server for RawBT)
   try{
     const ws = new WebSocket("ws://localhost:40213/");
     ws.onopen = ()=>{
-      // Server for RawBT expects JSON format
-      const job = JSON.stringify({
-        type: "printText",
-        text: text
-      });
-      ws.send(job);
-      wsDone = true;
-      setTimeout(()=>{ try{ ws.close(); }catch(e){} }, 500);
-    };
-    ws.onerror = ()=>{ fallbackPrint(); };
-    ws.onclose = (e)=>{ if(!wsDone && e.code !== 1000) fallbackPrint(); };
-    setTimeout(()=>{ if(!wsDone){ try{ ws.close(); }catch(e){} fallbackPrint(); } }, 3000);
-  } catch(e){ fallbackPrint(); }
-
-  function fallbackPrint(){
-    if(wsDone) return;
-    wsDone = true;
-    if(!isAuto){
       try{
-        const url = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
-        const a = document.createElement("a");
-        a.href=url; a.style.display="none"; a.target="_blank";
-        document.body.appendChild(a); a.click();
-        setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
-      } catch(e){}
-    }
+        ws.send(JSON.stringify({type:"printText", text:text}));
+        done = true;
+        setTimeout(()=>{ try{ ws.close(); }catch(e){} }, 500);
+      } catch(e){ ws.close(); if(!isAuto) tryIntent(); }
+    };
+    ws.onerror = ()=>{ if(!done && !isAuto) tryIntent(); };
+    setTimeout(()=>{
+      if(!done){
+        try{ ws.close(); }catch(e){}
+        // Method 2: try rawbt:// URI scheme (no dialog for paid version)
+        if(!isAuto){
+          try{
+            window.location.href = "rawbt:data:text/plain;charset=utf-8," + encodeURIComponent(text);
+            done = true;
+          } catch(e){ tryIntent(); }
+        }
+      }
+    }, 2000);
+  } catch(e){
+    if(!isAuto) tryIntent();
   }
 }
 
