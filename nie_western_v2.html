@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v28</title>
+<title>NIE Western Food v30</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -763,19 +763,30 @@ function updateCartFab(){
 function openModModal(item){
   document.getElementById("mod-title").textContent = item.name;
   document.getElementById("mod-price").textContent = fmtS(item.price);
-  // Show upsell label if only SIDE modifier
+  const hasSauce = item.modifiers.some(m=>m.id==="sauce");
   const onlySide = item.modifiers.length===1 && item.modifiers[0].id==="side";
-  if(onlySide){
+  
+  if(hasSauce){
+    // Sauce required — show item name as title
+    document.getElementById("mod-title").textContent = item.name;
+    document.getElementById("mod-price").textContent = fmtS(item.price);
+  } else if(onlySide){
     document.getElementById("mod-title").textContent = "🍽️ Want to add a side?";
     document.getElementById("mod-price").textContent = item.name+" — "+fmtS(item.price);
   }
-  // Show "No Thanks" only when modifier is optional (side upsell)
+  
+  // Show "No Thanks" only when no required modifier
+  const hasRequired = item.modifiers.some(m=>m.required);
   const hasOptional = item.modifiers.some(m=>!m.required);
   const noThanksBtn = document.getElementById("mod-no-thanks");
-  if(noThanksBtn) noThanksBtn.style.display = hasOptional ? "block" : "none";
-  // Confirm button always enabled for optional modifiers
+  if(noThanksBtn) noThanksBtn.style.display = (!hasRequired && hasOptional) ? "block" : "none";
+  // Confirm button
   const confirmBtn = document.getElementById("mod-confirm");
-  if(confirmBtn){ confirmBtn.disabled=false; confirmBtn.style.opacity="1"; }
+  if(confirmBtn){ 
+    confirmBtn.disabled = hasRequired ? true : false;
+    confirmBtn.style.opacity = hasRequired ? "0.4" : "1";
+    confirmBtn.textContent = hasSauce ? "Add to Order ✓" : "Add to Order ✓";
+  }
   renderModOptions();
   document.getElementById("mod-modal").classList.remove("hidden");
   document.getElementById("mod-modal").style.display = "flex";
@@ -842,6 +853,13 @@ function pickModMulti(modId, name, price){
 function pickMod(modId, name, price){
   modChoices[modId] = {name, price};
   renderModOptions();
+  // Enable confirm button if all required mods are picked
+  if(modItem){
+    const requiredMods = modItem.modifiers.filter(m=>m.required);
+    const allPicked = requiredMods.every(m=>modChoices[m.id]);
+    const confirmBtn = document.getElementById("mod-confirm");
+    if(confirmBtn){ confirmBtn.disabled=!allPicked; confirmBtn.style.opacity=allPicked?"1":"0.4"; }
+  }
 }
 
 function confirmMod(){
