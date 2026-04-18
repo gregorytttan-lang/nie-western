@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v17</title>
+<title>NIE Western Food v18</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2026,25 +2026,33 @@ function initAutoPrintToggle(){
   }
 }
 
-function rawbtPrint(text){
-  // Try HTTP API first (works for auto-print without user gesture)
-  const httpPort = ls("rawbt_port_nie", "8080");
-  fetch("http://localhost:" + httpPort + "/rawbt/print?type=text", {
+function rawbtPrint(text, isAuto=false){
+  const port = ls("rawbt_port_nie", "8080");
+  // Always try HTTP API first — no popup, works for auto-print
+  fetch("http://localhost:" + port + "/rawbt", {
     method: "POST",
-    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    headers: {"Content-Type": "text/plain; charset=utf-8"},
     body: text
+  }).then(r=>{
+    if(!r.ok) throw new Error("HTTP " + r.status);
   }).catch(()=>{
-    // Fallback to intent URL (requires user tap)
-    try{
-      const intentUrl = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
-      const a = document.createElement("a");
-      a.href = intentUrl;
-      a.style.display = "none";
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
-    } catch(e){ console.error("Print error:", e); }
+    if(!isAuto){
+      // Manual print only: fallback to intent (shows popup but user is present)
+      try{
+        const url = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
+        const a = document.createElement("a");
+        a.href = url; a.style.display="none"; a.target="_blank";
+        document.body.appendChild(a); a.click();
+        setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
+      } catch(e){}
+    } else {
+      // Auto-print: silently retry via HTTP after 2s
+      setTimeout(()=>{
+        fetch("http://localhost:" + port + "/rawbt", {
+          method:"POST", headers:{"Content-Type":"text/plain; charset=utf-8"}, body:text
+        }).catch(()=>{});
+      }, 2000);
+    }
   });
 }
 
@@ -2147,8 +2155,8 @@ function printAllOrders(){
   });
 }
 
-function printTicket(o){
-  rawbtPrint(buildTicketText(o));
+function printTicket(o, isAuto=false){
+  rawbtPrint(buildTicketText(o), isAuto);
 }
 
 function connectPrinter(){
@@ -2419,7 +2427,7 @@ ordersRef.on("value", snap=>{
         }
         // Auto-print if enabled and order needs kitchen
         if(autoPrintEnabled && o.needsKitchen !== false){
-          setTimeout(()=>{ printTicket(o); }, 800);
+          setTimeout(()=>{ printTicket(o, true); }, 1000);
         }
       }
     });
