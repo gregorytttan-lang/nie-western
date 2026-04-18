@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v15</title>
+<title>NIE Western Food v16</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -99,6 +99,19 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;padding:16px;margin-bottom:12px">
       <div class="serif" style="font-size:14px;font-weight:700;margin-bottom:4px">Epson TM-m30III — USB-C Printer</div>
       <div style="font-size:12px;color:#78716C;margin-bottom:8px">Prints via RawBT app + USB-C cable. Make sure RawBT is open and Epson is connected.</div>
+      <!-- Auto-print toggle -->
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#F5F3F0;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1C1917">🖨️ Auto-Print New Orders</div>
+          <div style="font-size:11px;color:#78716C;margin-top:2px">Automatically prints every new order when it arrives</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">
+          <input type="checkbox" id="auto-print-toggle" onchange="toggleAutoPrint(this.checked)"
+            style="opacity:0;width:0;height:0;">
+          <span id="auto-print-slider" style="position:absolute;inset:0;background:#D4CFC8;border-radius:24px;transition:.3s;"></span>
+          <span id="auto-print-knob" style="position:absolute;left:2px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 4px rgba(0,0,0,.2);"></span>
+        </label>
+      </div>
       <div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px;color:#166534;line-height:1.6">
         ✅ Keep RawBT running in background. Tap 🖨️ on each order to print.
       </div>
@@ -1985,6 +1998,27 @@ function thermerPrint(o){
   } catch(e){ console.error("Print error:", e); }
 }
 
+// Auto-print state
+let autoPrintEnabled = ls("auto_print_nie", false);
+
+function toggleAutoPrint(enabled){
+  autoPrintEnabled = enabled;
+  lss("auto_print_nie", enabled);
+  const slider = document.getElementById("auto-print-slider");
+  const knob = document.getElementById("auto-print-knob");
+  if(slider) slider.style.background = enabled ? "#C4572A" : "#D4CFC8";
+  if(knob) knob.style.left = enabled ? "22px" : "2px";
+  toast(enabled ? "✅ Auto-print ON" : "🖨️ Auto-print OFF", enabled ? "#16A34A" : "#78716C");
+}
+
+function initAutoPrintToggle(){
+  const cb = document.getElementById("auto-print-toggle");
+  if(cb){
+    cb.checked = autoPrintEnabled;
+    toggleAutoPrint(autoPrintEnabled);
+  }
+}
+
 function rawbtPrint(text){
   // Fallback to RawBT if Thermer not available
   try{
@@ -2367,6 +2401,10 @@ ordersRef.on("value", snap=>{
           speakOrder(o);
           // Flash the screen to alert staff of new order
           flashNewOrder();
+        }
+        // Auto-print if enabled and order needs kitchen
+        if(autoPrintEnabled && o.needsKitchen !== false){
+          setTimeout(()=>{ printTicket(o); }, 800);
         }
       }
     });
