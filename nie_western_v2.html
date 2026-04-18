@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v16</title>
+<title>NIE Western Food v17</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -117,6 +117,13 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       </div>
       <div id="bt-status-box" style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:#991B1B;line-height:1.6">
         🔴 Tap Connect & Test to verify printer is working.
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:#1C1917;">RawBT HTTP Port:</div>
+        <input id="rawbt-port-input" type="number" value="8080" 
+          style="width:80px;padding:6px 10px;border:1.5px solid #E5E0D8;border-radius:8px;font-size:13px;"
+          onchange="lss('rawbt_port_nie', this.value)">
+        <div style="font-size:11px;color:#78716C;">(default 8080)</div>
       </div>
       <button id="bt-btn" onclick="connectPrinter()" style="background:#C4572A;color:#fff;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:600;width:100%;margin-bottom:10px">🖨️ Connect & Test Print</button>
       <div id="bt-status" style="font-size:12px;color:#78716C;margin-top:8px;text-align:center"></div>
@@ -2020,17 +2027,25 @@ function initAutoPrintToggle(){
 }
 
 function rawbtPrint(text){
-  // Fallback to RawBT if Thermer not available
-  try{
-    const intentUrl = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
-    const a = document.createElement("a");
-    a.href = intentUrl;
-    a.style.display = "none";
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
-  } catch(e){ console.error("Print error:", e); }
+  // Try HTTP API first (works for auto-print without user gesture)
+  const httpPort = ls("rawbt_port_nie", "8080");
+  fetch("http://localhost:" + httpPort + "/rawbt/print?type=text", {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: text
+  }).catch(()=>{
+    // Fallback to intent URL (requires user tap)
+    try{
+      const intentUrl = "intent://rawbt/api/print?text=" + encodeURIComponent(text) + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end";
+      const a = document.createElement("a");
+      a.href = intentUrl;
+      a.style.display = "none";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ try{ document.body.removeChild(a); }catch(e){} }, 1000);
+    } catch(e){ console.error("Print error:", e); }
+  });
 }
 
 function buildTicketText(o){
