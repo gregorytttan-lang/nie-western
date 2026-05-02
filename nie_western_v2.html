@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v38</title>
+<title>NIE Western Food v40</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -1646,10 +1646,41 @@ function toggleStall(){
 let trackingOrderId = null;
 let trackingListener = null;
 
+// Customer beep - plays when order is ready for pickup
+function playCustomerBeep(){
+  try{
+    for(let i=0;i<12;i++){
+      setTimeout(()=>{
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "square";
+        osc.frequency.value = 1000;
+        gain.gain.setValueAtTime(2.0, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.5);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime+0.5);
+        setTimeout(()=>ctx.close(), 700);
+      }, i*700);
+    }
+    // Vibrate 12 times
+    if(navigator.vibrate) navigator.vibrate(Array(12).fill([400,200]).flat());
+  } catch(e){}
+}
+
+let lastKnownStatus = null;
+
 function updateStatusUI(status){
   if(status === "collected" && trackingOrderId){
     removeActiveOrder(trackingOrderId);
   }
+  // Beep when status changes to ready
+  if(status === "ready" && lastKnownStatus !== "ready"){
+    playCustomerBeep();
+  }
+  lastKnownStatus = status;
   // Update status steps - dark theme
   const steps = [
     {id:"paid",      icon:"✅", label:"Order Received"},
