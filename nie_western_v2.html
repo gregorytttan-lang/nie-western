@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v40</title>
+<title>NIE Western Food v41</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -280,6 +280,12 @@ input{font-family:'DM Sans',sans-serif;outline:none}
   <div style="background:#C4572A;padding:28px 20px;text-align:center;">
     <div id="queue-no-label" style="font-size:14px;color:rgba(255,255,255,0.8);font-weight:600;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Queue No.</div>
     <div id="queue-number" style="font-size:100px;font-weight:900;color:#fff;line-height:1;font-family:Georgia,serif"></div>
+  </div>
+
+  <!-- Sound enable button -->
+  <div id="sound-enable-bar" style="background:#F59E0B;padding:14px 20px;text-align:center;cursor:pointer;" onclick="enableCustomerSound()">
+    <div style="font-size:16px;font-weight:800;color:#1C1917;">🔔 Tap here to enable sound alert</div>
+    <div style="font-size:12px;color:rgba(0,0,0,0.6);margin-top:3px;">So we can beep your phone when food is ready!</div>
   </div>
 
   <!-- Status Bar -->
@@ -1646,27 +1652,65 @@ function toggleStall(){
 let trackingOrderId = null;
 let trackingListener = null;
 
+// Customer sound enable
+let customerSoundEnabled = false;
+let customerAudioCtx = null;
+
+function enableCustomerSound(){
+  try{
+    // Create and resume AudioContext on user gesture
+    customerAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    customerAudioCtx.resume().then(()=>{
+      customerSoundEnabled = true;
+      // Play a soft confirmation beep
+      const osc = customerAudioCtx.createOscillator();
+      const gain = customerAudioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(customerAudioCtx.destination);
+      osc.type = "sine";
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.5, customerAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, customerAudioCtx.currentTime+0.3);
+      osc.start(customerAudioCtx.currentTime);
+      osc.stop(customerAudioCtx.currentTime+0.3);
+      // Update button to show enabled
+      const bar = document.getElementById("sound-enable-bar");
+      if(bar){
+        bar.style.background = "#16A34A";
+        bar.innerHTML = '<div style="font-size:16px;font-weight:800;color:#fff;">🔔 Sound Alert Enabled ✅</div><div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:3px;">We will beep your phone when food is ready!</div>';
+        bar.style.cursor = "default";
+        bar.onclick = null;
+      }
+    });
+  } catch(e){ console.error("Audio enable error:", e); }
+}
+
 // Customer beep - plays when order is ready for pickup
 function playCustomerBeep(){
+  // Vibrate regardless of audio permission
+  if(navigator.vibrate) navigator.vibrate(Array(12).fill([400,200]).flat());
   try{
+    // Use pre-enabled AudioContext if available
+    const ctx = customerSoundEnabled && customerAudioCtx
+      ? customerAudioCtx
+      : new (window.AudioContext||window.webkitAudioContext)();
+    if(customerSoundEnabled && customerAudioCtx) ctx.resume();
     for(let i=0;i<12;i++){
       setTimeout(()=>{
-        const ctx = new (window.AudioContext||window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "square";
-        osc.frequency.value = 1000;
-        gain.gain.setValueAtTime(2.0, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.5);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime+0.5);
-        setTimeout(()=>ctx.close(), 700);
+        try{
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = "square";
+          osc.frequency.value = 1000;
+          gain.gain.setValueAtTime(2.0, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.5);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime+0.5);
+        } catch(e){}
       }, i*700);
     }
-    // Vibrate 12 times
-    if(navigator.vibrate) navigator.vibrate(Array(12).fill([400,200]).flat());
   } catch(e){}
 }
 
