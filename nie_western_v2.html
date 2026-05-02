@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v35</title>
+<title>NIE Western Food v36</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -59,6 +59,17 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       </div>
     </div>
     <div id="cat-tabs" style="display:flex;overflow-x:auto;scrollbar-width:none;padding:0 12px"></div>
+  </div>
+  <!-- Recovery Banner -->
+  <div id="recovery-banner" style="display:none;margin:8px 12px;background:#FEF3C7;border:2px solid #F59E0B;border-radius:14px;padding:12px 16px;cursor:pointer;" onclick="openRecoveryList()">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">📋</span>
+      <div style="flex:1;">
+        <div id="recovery-banner-text" style="font-size:13px;font-weight:700;color:#92400E;"></div>
+        <div style="font-size:11px;color:#B45309;margin-top:2px;">Tap to view your order status</div>
+      </div>
+      <span style="font-size:18px;color:#92400E;">›</span>
+    </div>
   </div>
   <!-- Items list -->
   <div id="items-list" style="padding-bottom:100px"></div>
@@ -141,6 +152,17 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <div id="mod-options"></div>
     <button id="mod-no-thanks" onclick="skipSides()" style="width:100%;padding:12px;font-size:14px;font-weight:600;border-radius:14px;background:#F5F3F0;color:#78716C;margin-top:8px;border:1px solid #E5E0D8">No Thanks — Skip Sides</button>
     <button id="mod-confirm" onclick="confirmMod()" style="width:100%;padding:16px;font-size:16px;font-weight:600;border-radius:14px;background:#C4572A;color:#fff;margin-top:8px">Add to Order ✓</button>
+  </div>
+</div>
+
+<!-- Recovery List Modal -->
+<div id="recovery-modal" class="hidden overlay" style="background:rgba(28,25,23,0.6);display:flex;align-items:flex-end">
+  <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:24px">
+    <div style="width:40px;height:4px;background:#E5E0D8;border-radius:2px;margin:0 auto 20px"></div>
+    <div style="font-size:18px;font-weight:700;color:#1C1917;margin-bottom:4px;">📋 Your Active Orders</div>
+    <div style="font-size:12px;color:#78716C;margin-bottom:20px;">Tap an order to see its status</div>
+    <div id="recovery-list"></div>
+    <button onclick="closeRecoveryModal()" style="width:100%;padding:14px;background:#F5F3F0;color:#78716C;border:none;border-radius:12px;font-size:14px;font-weight:600;margin-top:12px;">Close</button>
   </div>
 </div>
 
@@ -1050,6 +1072,7 @@ async function confirmPayment(paymentMethod='paynow'){
     document.getElementById("queue-dining").textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
     updateStatusUI("paid");
     startTrackingOrder(o.id);
+    saveActiveOrder(o);
   }
 
   // Build order summary
@@ -1081,6 +1104,103 @@ async function confirmPayment(paymentMethod='paynow'){
   m.classList.remove("hidden"); m.style.display="flex";
   renderMenu();
   updateKitchenBadge();
+}
+
+// ── ORDER RECOVERY ──────────────────────────────────────────────────────────
+const ACTIVE_ORDERS_KEY = "active_orders_nie";
+
+function saveActiveOrder(o){
+  const orders = ls(ACTIVE_ORDERS_KEY, []);
+  // Add if not already in list
+  if(!orders.find(x=>x.id===o.id)){
+    orders.push({id:o.id, queueNo:o.queueNo, total:o.total, createdAt:o.createdAt});
+    lss(ACTIVE_ORDERS_KEY, orders);
+  }
+  updateRecoveryBanner();
+}
+
+function removeActiveOrder(orderId){
+  const orders = ls(ACTIVE_ORDERS_KEY, []).filter(o=>o.id!==orderId);
+  lss(ACTIVE_ORDERS_KEY, orders);
+  updateRecoveryBanner();
+}
+
+function updateRecoveryBanner(){
+  // Clean up old orders (older than 3 hours)
+  const cutoff = Date.now() - 3*60*60*1000;
+  let orders = ls(ACTIVE_ORDERS_KEY, []).filter(o=>o.createdAt > cutoff);
+  lss(ACTIVE_ORDERS_KEY, orders);
+
+  const banner = document.getElementById("recovery-banner");
+  const bannerText = document.getElementById("recovery-banner-text");
+  if(!banner || !bannerText) return;
+
+  if(orders.length === 0){
+    banner.style.display = "none";
+    return;
+  }
+
+  banner.style.display = "block";
+  if(orders.length === 1){
+    bannerText.textContent = "📋 You have an active order — Q#" + String(orders[0].queueNo).padStart(2,"0");
+  } else {
+    const nums = orders.map(o=>"Q#"+String(o.queueNo).padStart(2,"0")).join(", ");
+    bannerText.textContent = "📋 You have " + orders.length + " active orders — " + nums;
+  }
+}
+
+function openRecoveryList(){
+  const orders = ls(ACTIVE_ORDERS_KEY, []);
+  if(orders.length === 0) return;
+  if(orders.length === 1){
+    // Single order — go straight to queue screen
+    reopenQueueForOrder(orders[0].id);
+    return;
+  }
+  // Multiple orders — show list
+  const list = document.getElementById("recovery-list");
+  list.innerHTML = orders.map(o=>`
+    <div onclick="closeRecoveryModal();reopenQueueForOrder('${o.id}')"
+      style="display:flex;align-items:center;gap:14px;background:#FAF9F7;border:1.5px solid #E5E0D8;border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;">
+      <div style="background:#C4572A;color:#fff;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;flex-shrink:0;">
+        ${String(o.queueNo).padStart(2,"0")}
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:700;color:#1C1917;">Queue #${String(o.queueNo).padStart(2,"0")}</div>
+        <div style="font-size:12px;color:#78716C;">Total: $${Number(o.total).toFixed(2)}</div>
+      </div>
+      <span style="font-size:20px;color:#C4572A;">›</span>
+    </div>`).join("");
+  const m = document.getElementById("recovery-modal");
+  m.classList.remove("hidden"); m.style.display="flex";
+}
+
+function closeRecoveryModal(){
+  const m = document.getElementById("recovery-modal");
+  m.classList.add("hidden"); m.style.display="none";
+}
+
+function reopenQueueForOrder(orderId){
+  // Re-open queue modal for a specific order
+  ordersRef.child(orderId).once("value", snap=>{
+    const o = snap.val();
+    if(!o){ 
+      removeActiveOrder(orderId);
+      toast("Order not found — may have been completed", "#78716C");
+      return;
+    }
+    // Restore queue screen
+    const qLabel = document.getElementById("queue-no-label");
+    if(qLabel) qLabel.style.display="";
+    const trackBar = document.getElementById("order-tracking-bar");
+    if(trackBar) trackBar.style.display="";
+    document.getElementById("queue-number").textContent = String(o.queueNo).padStart(2,"0");
+    document.getElementById("queue-dining").textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
+    updateStatusUI(o.status);
+    startTrackingOrder(orderId);
+    const m = document.getElementById("queue-modal");
+    m.classList.remove("hidden"); m.style.display="flex";
+  });
 }
 
 function closeQueue(){
@@ -1536,6 +1656,9 @@ let trackingOrderId = null;
 let trackingListener = null;
 
 function updateStatusUI(status){
+  if(status === "collected" && trackingOrderId){
+    removeActiveOrder(trackingOrderId);
+  }
   const configs = {
     "paid":      {received:"#16A34A", preparing:"#E5E0D8", ready:"#E5E0D8", rcvTxt:"Order\nReceived", prepTxt:"Chef is\nCooking", rdyTxt:"Ready for\nPickup!", rcvClr:"#16A34A", prepClr:"#D4CFC8", rdyClr:"#D4CFC8"},
     "preparing": {received:"#16A34A", preparing:"#C4572A", ready:"#E5E0D8", rcvTxt:"Order\nReceived", prepTxt:"Chef is\nCooking 🔄", rdyTxt:"Ready for\nPickup!", rcvClr:"#16A34A", prepClr:"#C4572A", rdyClr:"#D4CFC8"},
@@ -2445,6 +2568,8 @@ ordersRef.on("value", snap=>{
 
 renderMenu();
 updateKitchenBadge();
+// Init recovery banner
+updateRecoveryBanner();
 </script>
 <!-- Password Modal -->
 <div id="pwd-modal" class="hidden" style="position:fixed;inset:0;z-index:999;background:rgba(28,25,23,0.7);display:flex;align-items:center;justify-content:center;padding:24px">
