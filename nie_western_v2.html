@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v36</title>
+<title>NIE Western Food v37</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -267,65 +267,44 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 </div>
 
 <!-- Queue Modal -->
-<div id="queue-modal" class="hidden overlay" style="background:#fff;display:flex;flex-direction:column;padding:20px 16px;overflow:hidden">
+<div id="queue-modal" class="hidden overlay" style="background:#1C1917;display:flex;flex-direction:column;padding:0;overflow:hidden">
 
-  <!-- Top: stall name + Q number side by side -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div>
-      <div style="font-size:11px;color:#16A34A;font-weight:600;text-transform:uppercase;letter-spacing:0.1em">Order Confirmed ✅</div>
-      <div class="serif" style="font-size:13px;font-weight:700;color:#1C1917;margin-top:2px">NIE Western Food</div>
-      <div id="queue-dining" style="font-size:12px;color:#78716C;margin-top:2px"></div>
-    </div>
-    <div style="text-align:right">
-      <div style="font-size:11px;color:#78716C;margin-bottom:2px">Queue No.</div>
-      <div class="serif" id="queue-number" style="font-size:64px;font-weight:700;color:#C4572A;line-height:1"></div>
-    </div>
+  <!-- Header -->
+  <div style="background:#1C1917;padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.1)">
+    <div style="font-size:13px;color:#16A34A;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px">✅ Order Confirmed</div>
+    <div style="font-size:20px;font-weight:700;color:#fff;">NIE Western Food</div>
+    <div id="queue-dining" style="font-size:14px;color:rgba(255,255,255,0.6);margin-top:2px"></div>
   </div>
 
-  <!-- Status tracker horizontal -->
-  <div id="order-tracking-bar" style="background:#F5F3F0;border:1px solid #E5E0D8;border-radius:12px;padding:12px 16px;margin-bottom:10px">
-    <div style="font-size:10px;color:#1E40AF;font-weight:600;margin-bottom:10px">📱 Keep this page open to track your order live!</div>
-    <div style="display:flex;align-items:flex-start;justify-content:space-between">
-      <!-- Step 1 -->
-      <div style="flex:1;text-align:center">
-        <div id="dot-received" style="width:32px;height:32px;border-radius:50%;background:#16A34A;display:flex;align-items:center;justify-content:center;font-size:16px;margin:0 auto 6px">✅</div>
-        <div id="lbl-received" style="font-size:10px;font-weight:700;color:#16A34A;line-height:1.3">Order<br>Received</div>
-      </div>
-      <!-- Line -->
-      <div style="flex:0.5;height:2px;background:#E5E0D8;margin-top:16px"></div>
-      <!-- Step 2 -->
-      <div style="flex:1;text-align:center">
-        <div id="dot-preparing" style="width:32px;height:32px;border-radius:50%;background:#E5E0D8;display:flex;align-items:center;justify-content:center;font-size:16px;margin:0 auto 6px">👨‍🍳</div>
-        <div id="lbl-preparing" style="font-size:10px;font-weight:600;color:#D4CFC8;line-height:1.3">Chef is<br>Cooking</div>
-      </div>
-      <!-- Line -->
-      <div style="flex:0.5;height:2px;background:#E5E0D8;margin-top:16px"></div>
-      <!-- Step 3 -->
-      <div style="flex:1;text-align:center">
-        <div id="dot-ready" style="width:32px;height:32px;border-radius:50%;background:#E5E0D8;display:flex;align-items:center;justify-content:center;font-size:16px;margin:0 auto 6px">🔔</div>
-        <div id="lbl-ready" style="font-size:10px;font-weight:600;color:#D4CFC8;line-height:1.3">Ready for<br>Pickup!</div>
-      </div>
+  <!-- Queue Number Big -->
+  <div style="background:#C4572A;padding:28px 20px;text-align:center;">
+    <div id="queue-no-label" style="font-size:14px;color:rgba(255,255,255,0.8);font-weight:600;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Queue No.</div>
+    <div id="queue-number" style="font-size:100px;font-weight:900;color:#fff;line-height:1;font-family:Georgia,serif"></div>
+  </div>
+
+  <!-- Status Bar -->
+  <div id="order-tracking-bar" style="background:#252220;padding:16px 20px;">
+    <div style="font-size:11px;color:#C4572A;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:14px;text-align:center">📱 Keep this page open to track your order</div>
+    <div id="order-status-bar" style="display:flex;align-items:center;justify-content:center;gap:0">
+      <!-- Steps rendered by updateStatusUI -->
     </div>
   </div>
 
-  <!-- Ready banner -->
-  <div id="ready-banner" class="hidden" style="background:#F0FDF4;border:2px solid #16A34A;border-radius:12px;padding:12px;margin-bottom:10px;text-align:center;animation:pulse 1s infinite">
-    <div style="font-size:24px;margin-bottom:4px">🔔</div>
-    <div style="font-size:16px;font-weight:700;color:#16A34A;margin-bottom:2px">Your Food is Ready!</div>
-    <div style="font-size:12px;color:#166534">Please collect at the counter</div>
+  <!-- Order Summary -->
+  <div id="queue-order-summary" style="background:#1C1917;padding:16px 20px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+
+  <!-- Cash Notice -->
+  <div id="cash-notice" class="hidden" style="background:#1E3A5F;border-top:1px solid #2D5A8E;padding:12px 20px;font-size:13px;color:#93C5FD;font-weight:600">
+    💵 Please pay cash at the counter and show this screen
   </div>
 
-  <!-- Order summary compact -->
-  <div id="queue-order-summary" style="background:#F5F3F0;border:1px solid #E5E0D8;border-radius:12px;padding:12px 14px;margin-bottom:10px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+  <!-- Screenshot notice -->
+  <div style="background:#2D2116;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.08)">
+    <div style="font-size:12px;color:#F59E0B;font-weight:600;text-align:center">📸 Screenshot your bank payment confirmation as proof of payment</div>
+  </div>
 
-  <!-- Bottom notices compact -->
-  <div id="cash-notice" class="hidden" style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:12px;color:#1E40AF;font-weight:600">
-    💵 Please pay cash at the counter and show this queue number.
-  </div>
-  <div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#92400E;font-weight:600">
-    📸 Screenshot your bank payment confirmation as proof of payment
-  </div>
-  <button onclick="closeQueue()" style="background:#F5F3F0;color:#78716C;border:1px solid #E5E0D8;border-radius:10px;padding:12px;font-size:13px;font-weight:600;width:100%">Close & New Order</button>
+  <!-- Close button -->
+  <button onclick="closeQueue()" style="background:#333;color:#fff;border:none;border-top:1px solid rgba(255,255,255,0.1);padding:18px;font-size:16px;font-weight:700;width:100%">Close &amp; New Order</button>
 </div>
 
 <script>
@@ -1078,13 +1057,13 @@ async function confirmPayment(paymentMethod='paynow'){
   // Build order summary
   const addons = c => Object.values(c.choices||{}).flatMap(x=>Array.isArray(x)?x:[x]).filter(x=>{const n=x.name||x;return n!=="No thanks"&&n!=="None";}).map(x=>x.name||x);
   const summaryHtml = `
-    <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Your Items</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">Your Items</div>
     ${o.items.map(i=>{
       const ad = addons(i);
       const e = Object.values(i.choices||{}).reduce((s,c)=>s+choicePrice(c),0);
-      return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid #E5E0D8">
+      return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.1)">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:#1C1917">${i.name} ×${i.qty}</div>
+          <div style="font-size:15px;font-weight:700;color:#fff">${i.name} ×${i.qty}</div>
           ${ad.length?`<div style="font-size:11px;color:#78716C;margin-top:2px">${ad.join(" · ")}</div>`:""}
         </div>
         <div style="font-size:13px;font-weight:600;color:#C4572A;margin-left:12px">${fmtS((i.price+e)*i.qty)}</div>
@@ -1093,7 +1072,7 @@ async function confirmPayment(paymentMethod='paynow'){
     ${o.dining==="takeaway"&&o.takeawayCharge>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #E5E0D8;font-size:12px;color:#78716C"><span>Take Away Box</span><span>${fmtS(o.takeawayCharge)}</span></div>`:""}
     <div style="display:flex;justify-content:space-between;padding:10px 0 0;margin-top:4px">
       <span style="font-size:14px;font-weight:700;color:#1C1917">Total</span>
-      <span style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C4572A">${fmtS(o.total)}</span>
+      <span style="font-family:'Playfair Display',serif;font-size:22px;font-weight:800;color:#C4572A">${fmtS(o.total)}</span>
     </div>`;
   document.getElementById("queue-order-summary").innerHTML = summaryHtml;
 
@@ -1345,15 +1324,15 @@ function renderAdminMenu(){
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid #E5E0D8">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:#1C1917">Add a Side?</div>
-          <div style="font-size:11px;color:#78716C">Butter Rice / Egg / Mashed Potato / Fries / Spaghetti</div>
+          <div style="font-size:15px;font-weight:700;color:#fff">Add a Side?</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6)">Butter Rice / Egg / Mashed Potato / Fries / Spaghetti</div>
         </div>
         <button onclick="toggleMod('side')" style="background:${sideOn?"#DCFCE7":"#F5F3F0"};color:${sideOn?"#16A34A":"#78716C"};border:1px solid ${sideOn?"#86EFAC":"#E5E0D8"};border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;min-width:40px">${sideOn?"On":"Off"}</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid #E5E0D8">
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:#1C1917">Add Mushroom Soup?</div>
-          <div style="font-size:11px;color:#78716C">+$1.90</div>
+          <div style="font-size:15px;font-weight:700;color:#fff">Add Mushroom Soup?</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6)">+$1.90</div>
         </div>
         <button onclick="toggleMod('soup')" style="background:${soupOn?"#DCFCE7":"#F5F3F0"};color:${soupOn?"#16A34A":"#78716C"};border:1px solid ${soupOn?"#86EFAC":"#E5E0D8"};border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;min-width:40px">${soupOn?"On":"Off"}</button>
       </div>
@@ -1368,7 +1347,7 @@ function renderAdminMenu(){
         <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #E5E0D8">
           <div style="flex:1">
             <div style="font-size:13px;font-weight:600;color:${item.avail===false?"#D4CFC8":"#1C1917"}">${item.name}</div>
-            <div style="font-size:11px;color:#78716C">${item.desc||""}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.6)">${item.desc||""}</div>
           </div>
           <input type="number" step="0.10" value="${item.price}" onchange="updatePrice('${cat.id}','${item.id}',this.value)" style="width:72px;background:#F5F3F0;color:#C4572A;border:1px solid #E5E0D8;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700">
           <button onclick="toggleAvail('${cat.id}','${item.id}')" style="background:${item.avail===false?"#F5F3F0":"#DCFCE7"};color:${item.avail===false?"#78716C":"#16A34A"};border:1px solid ${item.avail===false?"#E5E0D8":"#86EFAC"};border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;min-width:40px">
@@ -1519,7 +1498,7 @@ function renderReports(){
           </div>
           <div style="border-top:1px solid #FED7AA;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between">
             <span style="font-size:13px;font-weight:700;color:#92400E">Cash in Box:</span>
-            <span style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#C4572A">${fmtS(cashInBox)}</span>
+            <span style="font-family:'Playfair Display',serif;font-size:22px;font-weight:800;color:#C4572A">${fmtS(cashInBox)}</span>
           </div>
         </div>
         <div style="font-size:12px;font-weight:600;color:#78716C;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Top Items Today</div>
@@ -1540,14 +1519,14 @@ function renderReports(){
       ${!days.length?"<div style='color:#78716C;font-size:13px'>No sales data yet.</div>":days.map(([date,d],i)=>`
         <div style="padding:10px 0;border-top:${i>0?"1px solid #E5E0D8":"none"}">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span style="font-size:13px;font-weight:600;color:#1C1917">${date===todayStr?"Today — "+date:date}</span>
+            <span style="font-size:15px;font-weight:700;color:#fff">${date===todayStr?"Today — "+date:date}</span>
             <div style="display:flex;gap:8px;align-items:center">
               <span style="font-size:11px;background:#F0FDF4;color:#166534;border-radius:6px;padding:2px 8px;font-weight:600">✅ ${fmtS(d.paynow||0)}</span>
               <span style="font-size:11px;background:#EFF6FF;color:#1E40AF;border-radius:6px;padding:2px 8px;font-weight:600">💵 ${fmtS(d.cash||0)}</span>
               <span style="font-family:'Playfair Display',serif;font-weight:700;color:#C4572A;font-size:14px">${fmtS(d.rev)}</span>
             </div>
           </div>
-          <div style="font-size:11px;color:#78716C">${d.count} orders · ${Object.entries(d.items).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,q])=>`${n} ×${q}`).join(" · ")}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6)">${d.count} orders · ${Object.entries(d.items).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([n,q])=>`${n} ×${q}`).join(" · ")}</div>
         </div>`).join("")}
     </div>
 
@@ -1563,7 +1542,7 @@ function renderReports(){
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#C4572A">${fmtQ(o.queueNo)}</span>
               <span style="font-size:10px;background:#F5F3F0;color:#78716C;border-radius:6px;padding:2px 8px">${o.status}</span>
-              <span style="font-size:11px;color:#78716C">${tme(o.createdAt)}</span>
+              <span style="font-size:12px;color:rgba(255,255,255,0.6)">${tme(o.createdAt)}</span>
             </div>
             <div style="font-size:11px;color:#78716C;margin-top:2px">${o.items.map(i=>`${i.qty}×${i.name}`).join(", ").slice(0,60)}</div>
           </div>
@@ -1659,6 +1638,27 @@ function updateStatusUI(status){
   if(status === "collected" && trackingOrderId){
     removeActiveOrder(trackingOrderId);
   }
+  // Update status steps - dark theme
+  const steps = [
+    {id:"paid",      icon:"✅", label:"Order Received"},
+    {id:"ready",     icon:"🔔", label:"Ready for Pickup!"},
+    {id:"collected", icon:"🥡", label:"Collected"},
+  ];
+  const statusOrder = ["paid","ready","collected"];
+  const curIdx = statusOrder.indexOf(status);
+  const bar = document.getElementById("order-status-bar");
+  if(!bar) return;
+  bar.innerHTML = steps.map((s,i)=>{
+    const done = i <= curIdx;
+    const active = i === curIdx;
+    return `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
+        <div style="width:52px;height:52px;border-radius:50%;background:${done?"#C4572A":"rgba(255,255,255,0.1)"};display:flex;align-items:center;justify-content:center;font-size:24px;border:2px solid ${active?"#fff":done?"#C4572A":"rgba(255,255,255,0.2)"}">${s.icon}</div>
+        <div style="font-size:11px;font-weight:${active?"700":"500"};color:${done?"#fff":"rgba(255,255,255,0.4)"};text-align:center;white-space:pre-line;line-height:1.3">${s.label}</div>
+      </div>
+      ${i<steps.length-1?`<div style="height:2px;width:24px;background:${i<curIdx?"#C4572A":"rgba(255,255,255,0.15)"};margin-bottom:20px;flex-shrink:0"></div>`:""}
+    `;
+  }).join("");
   const configs = {
     "paid":      {received:"#16A34A", preparing:"#E5E0D8", ready:"#E5E0D8", rcvTxt:"Order\nReceived", prepTxt:"Chef is\nCooking", rdyTxt:"Ready for\nPickup!", rcvClr:"#16A34A", prepClr:"#D4CFC8", rdyClr:"#D4CFC8"},
     "preparing": {received:"#16A34A", preparing:"#C4572A", ready:"#E5E0D8", rcvTxt:"Order\nReceived", prepTxt:"Chef is\nCooking 🔄", rdyTxt:"Ready for\nPickup!", rcvClr:"#16A34A", prepClr:"#C4572A", rdyClr:"#D4CFC8"},
@@ -1984,7 +1984,7 @@ function renderMonthlyArchives(){
     el.innerHTML = archives.map(a=>`
       <div style="padding:14px 0;border-top:1px solid #E5E0D8">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#1C1917">${a.monthName}</div>
+          <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:800;color:#fff">${a.monthName}</div>
           <div style="display:flex;gap:8px">
             <button onclick="viewArchive('${a.monthKey}')" style="background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">View</button>
             <button onclick="sendArchiveWhatsApp('${a.monthKey}')" style="background:#25D366;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">💬</button>
