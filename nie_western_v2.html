@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v37</title>
+<title>NIE Western Food v38</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -468,7 +468,7 @@ const DEFAULT_MENU = [
     {id:"sn13",name:"Onion Rings",price:2.00,desc:"Crunchy battered rings with that satisfying snap every time."},
     {id:"sn14",name:"Sandwich",price:1.60,desc:"A simple fuss-free sandwich that always hits the spot."},
   ]},
-  {id:"c6",name:"Breakfast",emoji:"🥞",avail:"before-1115",items:[
+  {id:"c6",name:"Breakfast",emoji:"🥞",avail:"before-1045",items:[
     {id:"b1",name:"Omelette Breakfast Set",price:4.50,desc:"Fluffy omelette served with toast, hash brown and chicken hotdog."},
     {id:"b2",name:"Toast Breakfast Set",price:4.00,desc:"Buttery toast, hash brown, chicken hotdog and salad — start right."},
     {id:"b3",name:"Scrambled Egg Breakfast Set",price:4.00,desc:"Fluffy scrambled eggs with toast, hash brown and chicken hotdog."},
@@ -559,7 +559,19 @@ function showView(v){
 // ── MENU ────────────────────────────────────────────────────────────────────
 let snacksInitDone = false;
 function renderMenu(){
-  const avail = menu.map(c=>({...c,items:c.items.filter(i=>i.avail!==false)})).filter(c=>c.items.length);
+  // Time-based availability check
+  const now = new Date();
+  const currentMins = now.getHours()*60 + now.getMinutes();
+  const isCatAvail = c => {
+    if(!c.avail) return true;
+    if(c.avail==="before-1045") return currentMins < (10*60+45);
+    if(c.avail==="before-1115") return currentMins < (11*60+15);
+    return true;
+  };
+  const avail = menu
+    .filter(c=> isCatAvail(c))
+    .map(c=>({...c,items:c.items.filter(i=>i.avail!==false)}))
+    .filter(c=>c.items.length);
   // Auto-switch to Snacks tab on first load if ?snacks=1
   if(isSnacksMode && !snacksInitDone){
     const si = avail.findIndex(c=>c.id==='c5');
