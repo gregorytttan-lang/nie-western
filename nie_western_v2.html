@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v41</title>
+<title>NIE Western Food v42</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2267,6 +2267,7 @@ function buildTicketText(o){
   const ESC = '\x1B';
   const GS  = '\x1D';
   const LF  = '\n';
+  const CHARSET_PC437 = ESC + 't' + '\x00'; // PC437 USA - fixes $ sign on SPRT printer
 
   // Text size commands
   const NORMAL    = ESC + '!' + '\x00';         // normal
@@ -2283,6 +2284,9 @@ function buildTicketText(o){
   const payLabel = o.paymentMethod==="cash" ? "CASH" : "PAYNOW";
 
   let t = "";
+
+  // Set charset to PC437 (USA) to print $ correctly on SPRT printer
+  t += CHARSET_PC437;
 
   // Header
   t += ALIGN_C + BOLD_ON + NORMAL;
@@ -2330,7 +2334,7 @@ function buildTicketText(o){
 
   // Total — double height
   t += ALIGN_L + DOUBLE_H + BOLD_ON;
-  t += "TOTAL: " + fmtS(o.total) + LF;
+  t += "TOTAL: SGD " + Number(o.total).toFixed(2) + LF;
   t += NORMAL + BOLD_OFF;
   t += "------------------------------------------------" + LF;
 
