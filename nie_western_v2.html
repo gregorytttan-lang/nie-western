@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v48</title>
+<title>NIE Western Food v49</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -1967,8 +1967,10 @@ function sendWhatsApp(){
 
   msg += "✅ End of Day Report";
 
-  const url = "https://wa.me/6590628726?text=" + encodeURIComponent(msg);
-  window.open(url, "_blank");
+  const url1 = "https://wa.me/6590628726?text=" + encodeURIComponent(msg);
+  const url2 = "https://wa.me/6581612943?text=" + encodeURIComponent(msg);
+  window.open(url1, "_blank");
+  setTimeout(()=>{ window.open(url2, "_blank"); }, 1000);
 }
 
 function addPayout(){
