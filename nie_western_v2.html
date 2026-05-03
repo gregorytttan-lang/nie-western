@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v47</title>
+<title>NIE Western Food v48</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -1751,7 +1751,7 @@ function updateStatusUI(status){
   // Show cancelled on customer screen
   if(status === "cancelled"){
     document.getElementById("queue-number").textContent = "✕";
-    document.getElementById("queue-dining").textContent = "Order Cancelled";
+    document.getElementById("queue-dining").textContent = "If you did not request this cancellation, please approach our staff at the counter for assistance.";
     const qLabel = document.getElementById("queue-no-label");
     if(qLabel){ qLabel.textContent = "❌ Order Cancelled"; qLabel.style.color="#DC2626"; }
     const trackBar = document.getElementById("order-tracking-bar");
