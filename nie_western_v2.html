@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v44</title>
+<title>NIE Western Food v45</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -1224,6 +1224,7 @@ const STATUS = {
   preparing: {color:"#7C3AED",label:"Preparing",bg:"#F5F3FF"},
   ready:     {color:"#16A34A",label:"Ready",    bg:"#F0FDF4"},
   collected: {color:"#78716C",label:"Collected",bg:"#F5F3F0"},
+  cancelled: {color:"#DC2626",label:"Cancelled",bg:"#FEF2F2"},
 };
 
 function updOrder(id, status){
@@ -1252,13 +1253,15 @@ function renderKitchen(){
     // For old orders without needsKitchen flag — check items
     return o.items.some(i=>!snackIds.includes(i.id));
   };
-  const queue = orders.filter(o=>o.status!=="collected" && needsKitchenCheck(o)).sort((a,b)=>a.createdAt-b.createdAt);
+  const queue = orders.filter(o=>o.status!=="collected" && (needsKitchenCheck(o)||o.status==="cancelled")).sort((a,b)=>a.createdAt-b.createdAt);
   const tags  = document.getElementById("kitchen-tags");
   const n1 = orders.filter(o=>o.status==="paid").length;
+  const nC = orders.filter(o=>o.status==="cancelled" && new Date(o.createdAt).toDateString()===today()).length;
   const n2 = orders.filter(o=>o.status==="preparing").length;
   tags.innerHTML = [
     n1>0?`<span style="background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;text-transform:uppercase">${n1} Queue</span>`:"",
     n2>0?`<span style="background:#F5F3FF;color:#7C3AED;border:1px solid #DDD6FE;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;text-transform:uppercase">${n2} Preparing</span>`:"",
+    nC>0?`<span style="background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;text-transform:uppercase">${nC} Cancelled</span>`:"",
   ].join("");
   if(!queue.length){
     document.getElementById("kitchen-orders").innerHTML=`<div style="text-align:center;padding:80px 20px;color:#78716C;grid-column:1/-1"><div style="font-size:48px;margin-bottom:16px">✅</div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#1C1917;margin-bottom:6px">All Clear!</div><div style="font-size:13px">No pending orders</div></div>`;
@@ -1410,7 +1413,8 @@ function renderReports(){
   const localSnacks = ls("snacks_orders_nie", []);
   const allOrders = [...orders];
   localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
-  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status!=="cancelled");
+  const cancelledToday = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status==="cancelled").length;
   const todayRev      = todayOrders.reduce((s,o)=>s+o.total,0);
   const todayPaynow   = todayOrders.filter(o=>o.paymentMethod!=="cash").reduce((s,o)=>s+o.total,0);
   const todayCash     = todayOrders.filter(o=>o.paymentMethod==="cash").reduce((s,o)=>s+o.total,0);
@@ -1723,6 +1727,17 @@ function updateStatusUI(status){
   // Beep when status changes to ready
   if(status === "ready" && lastKnownStatus !== "ready"){
     playCustomerBeep();
+  }
+  // Show cancelled on customer screen
+  if(status === "cancelled"){
+    document.getElementById("queue-number").textContent = "✕";
+    document.getElementById("queue-dining").textContent = "Order Cancelled";
+    const qLabel = document.getElementById("queue-no-label");
+    if(qLabel){ qLabel.textContent = "❌ Order Cancelled"; qLabel.style.color="#DC2626"; }
+    const trackBar = document.getElementById("order-tracking-bar");
+    if(trackBar) trackBar.style.display="none";
+    // Remove from active orders
+    if(trackingOrderId) removeActiveOrder(trackingOrderId);
   }
   lastKnownStatus = status;
   // Update status steps - dark theme
