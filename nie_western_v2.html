@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v51</title>
+<title>NIE Western Food v53</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -407,6 +407,14 @@ const SAUCE = {id:"sauce",label:"🍝 Choose your Spaghetti Sauce",required:true
   {name:"Mushroom Cream",price:0},
 ]};
 
+// SIDE without spaghetti options (for spaghetti mains)
+const SIDE_NO_SPAG = {id:"side",label:"🍽️ Want to add a side?",required:false,multi:true,options:[
+  {name:"+ Butter Rice",price:0.70},
+  {name:"+ Crispy Fries",price:0.70},
+  {name:"+ Cheese Sauce",price:0.70},
+  {name:"+ Sunny Side Up Egg",price:0.70},
+]};
+
 const DEFAULT_MENU = [
   {id:"c1",name:"Shawarma",emoji:"🌯",items:[
     {id:"sh1",name:"Mixed Shawarma Combo (Rice & Fries)",price:6.90,desc:"Go all out — beef, chicken, fluffy rice and crispy fries."},
@@ -454,8 +462,8 @@ const DEFAULT_MENU = [
     {id:"f11",name:"Mushroom Soup",price:2.00,desc:"Warm velvety mushroom soup — comfort in a bowl."},
   ]},
   {id:"c4",name:"Spaghetti",emoji:"🍝",items:[
-    {id:"sp1",name:"Spaghetti Chicken Bolognese",price:4.80,desc:"Hearty chicken bolognese tossed through perfectly cooked spaghetti.",modifiers:[SIDE]},
-    {id:"sp2",name:"Spaghetti Mushroom Cream",price:4.80,desc:"Silky mushroom cream sauce over a generous plate of spaghetti.",modifiers:[SIDE]},
+    {id:"sp1",name:"Spaghetti Chicken Bolognese",price:4.80,desc:"Hearty chicken bolognese tossed through perfectly cooked spaghetti.",modifiers:[SIDE_NO_SPAG]},
+    {id:"sp2",name:"Spaghetti Mushroom Cream",price:4.80,desc:"Silky mushroom cream sauce over a generous plate of spaghetti.",modifiers:[SIDE_NO_SPAG]},
   ]},
   {id:"c5",name:"Snacks & Sides",emoji:"🍟",items:[
     {id:"sn0",name:"Cheese Fries",price:3.00,desc:"Crispy golden fries smothered in warm gooey cheese sauce.",needsKitchen:true},
@@ -676,9 +684,15 @@ function handleAdd(id){
       {name:"+ Sunny Side Up Egg", price:0.70},
     ];
 
+    // Build side options — remove spaghetti if item already has spaghetti
+    const hasSauce = item.modifiers.some(m=>m.id==="sauce");
+    const isSpagItem = ["sp1","sp2"].includes(item.id);
+    const effectiveSideOptions = isSpagItem
+      ? sideOptions.filter(o=>!o.name.includes("Spaghetti"))
+      : sideOptions;
     const filteredItem = {...item, modifiers: item.modifiers
-    .filter(m=> (m.id==="side" && sideOn) || m.id==="sauce")
-    .map(m=> m.id==="side" ? {...m, options: sideOptions} : m)};
+      .filter(m=> (m.id==="side" && sideOn) || m.id==="sauce")
+      .map(m=> m.id==="side" ? {...m, options: effectiveSideOptions} : m)};
 
     if(filteredItem.modifiers.length>0){
       modItem = filteredItem; modChoices = {};
@@ -711,7 +725,7 @@ function isMain(id){
   if(id==="sn10") return true;
   // Find which category this item belongs to
   for(const cat of menu){
-    if(cat.id==="c1"||cat.id==="c2"||cat.id==="c3"){ // Chicken Mains, Fish Mains, French Tacos & Spaghetti
+    if(cat.id==="c1"||cat.id==="c2"||cat.id==="c3"||cat.id==="c4"){ // Shawarma, Chicken Mains, Fish Mains, Spaghetti
       if(cat.items.find(i=>i.id===id)) return true;
     }
   }
