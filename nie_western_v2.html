@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v50</title>
+<title>NIE Western Food v51</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -502,6 +502,9 @@ const DEFAULT_MENU = [
 // Clear ALL old cache versions - force fresh menu
 ["menu_nie_v1","menu_nie_v2","menu_nie_v3","menu_nie_v4","menu_nie_v5","menu_nie_v6","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
 let menu    = ls("menu_nie_v7", DEFAULT_MENU);
+// Reset all avail flags to true on load — Firebase will apply correct state
+// This ensures admin toggles always take effect even on cached phones
+menu.forEach(cat=>cat.items.forEach(item=>{ item.avail = true; }));
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
@@ -2509,13 +2512,11 @@ if(ls("last_menu_version","") !== menuVersion){
 
 // Listen for availability changes from admin — syncs to all devices
 db.ref("availability").on("value", snap=>{
-  const data = snap.val();
-  if(!data) return;
+  const data = snap.val() || {};
+  // Reset all to available first, then apply Firebase overrides
   menu.forEach(cat=>{
     cat.items.forEach(item=>{
-      if(data.hasOwnProperty(item.id)){
-        item.avail = data[item.id] === false ? false : true;
-      }
+      item.avail = data.hasOwnProperty(item.id) ? (data[item.id] === false ? false : true) : true;
     });
   });
   saveMenu();
