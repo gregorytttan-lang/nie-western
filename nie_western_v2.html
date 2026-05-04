@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v49</title>
+<title>NIE Western Food v50</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -439,7 +439,6 @@ const DEFAULT_MENU = [
     {id:"m12",name:"Chicken Chop (Mashed & Salad)",price:4.80,desc:"Golden juicy chicken chop with creamy mash and fresh salad.",modifiers:[SIDE]},
     
     {id:"m14",name:"Chicken Cutlet (Fries & Salad)",price:4.80,desc:"Crunchy golden cutlet served up with fries and garden salad.",modifiers:[SIDE]},
-    {id:"m15",name:"Cheese Fries",price:3.00,desc:"Crispy golden fries smothered in warm gooey cheese sauce."},
   ]},
   {id:"c3",name:"Fish Mains",emoji:"🐟",items:[
     {id:"f1",name:"Grilled Fish (Spaghetti & Salad)",price:6.00,desc:"Grilled fish meets spaghetti — a surprisingly satisfying pair.",modifiers:[SAUCE,SIDE]},
@@ -459,6 +458,7 @@ const DEFAULT_MENU = [
     {id:"sp2",name:"Spaghetti Mushroom Cream",price:4.80,desc:"Silky mushroom cream sauce over a generous plate of spaghetti.",modifiers:[SIDE]},
   ]},
   {id:"c5",name:"Snacks & Sides",emoji:"🍟",items:[
+    {id:"sn0",name:"Cheese Fries",price:3.00,desc:"Crispy golden fries smothered in warm gooey cheese sauce.",needsKitchen:true},
     {id:"sn1",name:"Mozzarella Cheese Sticks",price:3.50,desc:"Pull-apart cheesy sticks with a perfectly golden crispy crunch."},
     {id:"sn2",name:"Popcorn Chicken",price:3.50,desc:"Bite-sized crispy chicken pieces you won't stop munching on."},
     {id:"sn3",name:"Chicken Nuggets (6 pcs)",price:3.00,desc:"Golden crispy nuggets — the classic snack that never gets old."},
@@ -500,8 +500,8 @@ const DEFAULT_MENU = [
 
 // ── STATE ───────────────────────────────────────────────────────────────────
 // Clear ALL old cache versions - force fresh menu
-["menu_nie_v1","menu_nie_v2","menu_nie_v3","menu_nie_v4","menu_nie_v5","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
-let menu    = ls("menu_nie_v6", DEFAULT_MENU);
+["menu_nie_v1","menu_nie_v2","menu_nie_v3","menu_nie_v4","menu_nie_v5","menu_nie_v6","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
+let menu    = ls("menu_nie_v7", DEFAULT_MENU);
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
@@ -638,7 +638,11 @@ function isAddon(id){
 
 function isSnackOnly(id){
   const snackCat = menu.find(c=>c.id==="c5");
-  return snackCat ? snackCat.items.some(i=>i.id===id) : false;
+  if(!snackCat) return false;
+  const item = snackCat.items.find(i=>i.id===id);
+  if(!item) return false;
+  // Items with needsKitchen:true are NOT snack-only (they need kitchen display)
+  return item.needsKitchen !== true;
 }
 
 function cartHasMain(){
@@ -1269,8 +1273,9 @@ function renderKitchen(){
   const needsKitchenCheck = o => {
     if(o.needsKitchen === false) return false;
     if(o.needsKitchen === true) return true;
-    // For old orders without needsKitchen flag — check items
-    return o.items.some(i=>!snackIds.includes(i.id));
+    // Check if any item needs kitchen (including Cheese Fries sn0)
+    const kitchenItems = ["sn0"]; // snack items that need cooking
+    return o.items.some(i=> !snackIds.includes(i.id) || kitchenItems.includes(i.id));
   };
   const queue = orders.filter(o=>o.status!=="collected" && (needsKitchenCheck(o)||o.status==="cancelled")).sort((a,b)=>a.createdAt-b.createdAt);
   const tags  = document.getElementById("kitchen-tags");
