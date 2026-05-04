@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v56</title>
+<title>NIE Western Food v57</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2383,10 +2383,13 @@ function buildTicketText(o){
   t += NORMAL + BOLD_OFF;
   t += "------------------------------------------------" + LF;
 
-  // Remarks
+  // Remarks — extra large so kitchen staff never miss it
   if(o.remarks){
-    t += ALIGN_L + BOLD_ON + "!! " + o.remarks + " !!" + BOLD_OFF + LF;
-    t += "------------------------------------------------" + LF;
+    t += ALIGN_C + DOUBLE_HW + BOLD_ON;
+    t += "** SPECIAL REMARK **" + BOLD_OFF + NORMAL + LF;
+    t += ALIGN_C + DOUBLE_HW + BOLD_ON;
+    t += o.remarks + BOLD_OFF + NORMAL + LF;
+    t += ALIGN_L + "================================================" + LF;
   }
 
   // Items — double height
