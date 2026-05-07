@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v59</title>
+<title>NIE Western Food v60</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -2421,7 +2421,13 @@ function buildTicketText(o){
     if(o.dining==="takeaway") t += " [TAKEAWAY]";
     t += LF;
     t += NORMAL + BOLD_OFF;
-    if(ad.length){ t += "  + " + ad.join(", ") + LF; }
+    if(ad.length){
+      ad.forEach(a=>{
+        // Remove leading "+ " if present from option names
+        const cleanName = a.replace(/^\+\s*/, "");
+        t += DOUBLE_H + BOLD_ON + "  Add " + cleanName + BOLD_OFF + NORMAL + LF;
+      });
+    }
     t += "------------------------------------------------" + LF;
   });
 
