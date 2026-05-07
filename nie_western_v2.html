@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v60</title>
+<title>NIE Western Food v61</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -318,6 +318,31 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 
 <script>
 // ── DATA ────────────────────────────────────────────────────────────────────
+// ── SHARED HELPERS ───────────────────────────────────────────────────────────
+function formatAddons(item){
+  return Object.values(item.choices||{})
+    .flatMap(x=>Array.isArray(x)?x:[x])
+    .filter(x=>{ const n=x.name||x; return n!=="No thanks"&&n!=="None"; })
+    .map(x=>x.name||x);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const CONFIG = {
+  STALL_NAME:   "NIE Western Food",
+  LOCATION:     "NIE Canteen",
+  STAFF_PWD:    "123456789",
+  WA_NUMBERS:   ["6590628726", "6581612943"],
+  SHEETS_URL:   "https://script.google.com/macros/s/AKfycbw-ZSqLtKFDJT2QDO0erE4Vr-yBVN7tllYpaQ615I2Po3GO82HD3fPcsWNwhYRixrbAlQ/exec",
+  MENU_KEY:     "menu_nie_v7",
+  BREAKFAST_CUTOFF: 10 * 60 + 45,  // 10:45 AM in minutes
+  RAWBT_PORT:   40213,
+};
+// Aliases for backward compat
+const STAFF_PWD  = CONFIG.STAFF_PWD;
+const SHEETS_URL = CONFIG.SHEETS_URL;
+// ─────────────────────────────────────────────────────────────────────────────
+
 const PAYNOW_UEN = "+6581612943";
 function tlv(tag,val){const v=String(val);return tag+v.length.toString().padStart(2,"0")+v;}
 function crc16(str){let c=0xFFFF;for(let i=0;i<str.length;i++){c^=str.charCodeAt(i)<<8;for(let j=0;j<8;j++){c=(c&0x8000)?((c<<1)^0x1021):(c<<1);c&=0xFFFF;}}return c.toString(16).toUpperCase().padStart(4,"0");}
@@ -511,8 +536,8 @@ const DEFAULT_MENU = [
 
 // ── STATE ───────────────────────────────────────────────────────────────────
 // Clear ALL old cache versions - force fresh menu
-["menu_nie_v1","menu_nie_v2","menu_nie_v3","menu_nie_v4","menu_nie_v5","menu_nie_v6","menu_w06_v4","menu_w06_v7"].forEach(k=>localStorage.removeItem(k));
-let menu    = ls("menu_nie_v7", DEFAULT_MENU);
+// Old cache keys auto-cleared on version change
+let menu    = ls(CONFIG.MENU_KEY, DEFAULT_MENU);
 // Reset all avail flags to true on load — Firebase will apply correct state
 // This ensures admin toggles always take effect even on cached phones
 menu.forEach(cat=>cat.items.forEach(item=>{ item.avail = true; }));
@@ -530,7 +555,7 @@ function saveMenu()  { lss("menu_nie_v6", menu); }
 function saveOrders(){ /* orders saved to Firebase */ }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
-const STAFF_PWD = "123456789";
+// STAFF_PWD via CONFIG alias above
 let _pendingView = null;
 let _authed = false;
 
@@ -584,7 +609,7 @@ function renderMenu(){
   const currentMins = now.getHours()*60 + now.getMinutes();
   const isCatAvail = c => {
     if(!c.avail) return true;
-    if(c.avail==="before-1045") return currentMins < (10*60+45);
+    if(c.avail==="before-1045") return currentMins < CONFIG.BREAKFAST_CUTOFF;
     if(c.avail==="before-1115") return currentMins < (11*60+15);
     return true;
   };
@@ -1655,7 +1680,7 @@ function renderReports(){
 }
 
 // ── GOOGLE SHEETS INTEGRATION ─────────────────────────────────────────────────
-const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw-ZSqLtKFDJT2QDO0erE4Vr-yBVN7tllYpaQ615I2Po3GO82HD3fPcsWNwhYRixrbAlQ/exec";
+// SHEETS_URL now in CONFIG
 
 function openAdminFromClosed(){
   const pwd = prompt("Enter staff password:");
@@ -2007,10 +2032,9 @@ function sendWhatsApp(){
 
   msg += "✅ End of Day Report";
 
-  const url1 = "https://wa.me/6590628726?text=" + encodeURIComponent(msg);
-  const url2 = "https://wa.me/6581612943?text=" + encodeURIComponent(msg);
-  window.open(url1, "_blank");
-  setTimeout(()=>{ window.open(url2, "_blank"); }, 1000);
+  CONFIG.WA_NUMBERS.forEach((num, i)=>{
+    setTimeout(()=>{ window.open("https://wa.me/"+num+"?text="+encodeURIComponent(msg), "_blank"); }, i*1200);
+  });
 }
 
 function addPayout(){
@@ -2489,30 +2513,7 @@ function testPrint(){
   connectPrinter();
 }
 
-function printPayout(p){
-  const ref = "PAY-" + p.date.replace(/-/g,"") + "-" + p.id.slice(-4);
-  const line2 = "--------------------------------\n";
-  let t = "";
-  t += "================================\n";
-  t += "     NIE WESTERN FOOD\n";
-  t += "     NIE Canteen\n";
-  t += "================================\n";
-  t += "     PAYMENT VOUCHER\n";
-  t += "================================\n";
-  t += "Ref: " + ref + "\n";
-  t += "Date: " + p.date + "\n";
-  t += line2;
-  t += "Supplier: " + p.supplier + "\n";
-  t += "Item: " + p.item + "\n";
-  if(p.notes) t += "Notes: " + p.notes + "\n";
-  t += line2;
-  t += "AMOUNT: " + fmtS(p.amount) + "\n";
-  t += line2;
-  t += "Authorised by: ________________\n\n";
-  t += "Signature:     ________________\n";
-  t += "================================\n\n\n";
-  rawbtPrint(t);
-}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 
 // ── FIREBASE REALTIME SYNC ────────────────────────────────────────────────────
