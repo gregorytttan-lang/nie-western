@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v57</title>
+<title>NIE Western Food v59</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -46,6 +46,9 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <div id="reopen-msg" style="font-size:15px;color:#1C1917;font-weight:600;line-height:1.6"></div>
     </div>
     <div style="margin-top:28px;font-size:13px;color:#78716C">Thank you for visiting! See you soon 🙏</div>
+    <div style="margin-top:28px;">
+      <button onclick="openAdminFromClosed()" style="background:#1C1917;color:#fff;border:none;border-radius:12px;padding:12px 28px;font-size:14px;font-weight:700;cursor:pointer;">⚙️ Staff Admin</button>
+    </div>
   </div>
   <!-- Menu header -->
   <div style="background:#fff;border-bottom:1px solid #E5E0D8">
@@ -1653,6 +1656,20 @@ function renderReports(){
 
 // ── GOOGLE SHEETS INTEGRATION ─────────────────────────────────────────────────
 const SHEETS_URL = "https://script.google.com/macros/s/AKfycbw-ZSqLtKFDJT2QDO0erE4Vr-yBVN7tllYpaQ615I2Po3GO82HD3fPcsWNwhYRixrbAlQ/exec";
+
+function openAdminFromClosed(){
+  const pwd = prompt("Enter staff password:");
+  if(!pwd) return;
+  if(pwd === STAFF_PWD){
+    // Hide closed screen and go to Admin
+    const closed = document.getElementById("closed-screen");
+    if(closed) closed.style.display = "none";
+    switchView("admin");
+    renderAdmin();
+  } else {
+    alert("❌ Incorrect password. Please try again.");
+  }
+}
 
 function renderStallStatus(){
   const isOpen = ls("stall_open_nie", true);
