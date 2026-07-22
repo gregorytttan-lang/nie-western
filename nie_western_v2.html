@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v71</title>
+<title>NIE Western Food v73</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -16,6 +16,7 @@ button{font-family:'DM Sans',sans-serif;cursor:pointer;border:none;outline:none}
 input{font-family:'DM Sans',sans-serif;outline:none}
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-thumb{background:#D4CFC8;border-radius:2px}
+@keyframes callPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.85}}
 .serif{font-family:'Playfair Display',serif}
 .hidden{display:none!important}
 .overlay{position:fixed;inset:0;z-index:500;overflow-y:auto}
@@ -1493,6 +1494,11 @@ function updOrder(id, status){
   }
 }
 
+function callOrder(queueNo){
+  try{ db.ref("queue/call").set({ queueNo: queueNo, at: Date.now() }); }catch(e){}
+  toast("\ud83d\udd0a Calling #" + String(queueNo).padStart(3,"0"), "#2563EB");
+}
+
 function confirmCancelOrder(orderId){
   const order = orders.find(o=>o.id===orderId);
   if(!order) return;
@@ -1582,6 +1588,7 @@ function renderKitchen(){
       </div>
       <div style="padding:0 14px 12px;display:flex;gap:8px;flex-wrap:wrap">
         ${order.status!=="ready"&&order.status!=="collected"?`<button onclick="updOrder('${order.id}','ready')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#16A34A;color:#fff;border-radius:9px">✓ Done</button>`:""}
+        ${order.status==="ready"?`<button onclick="callOrder(${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#2563EB;color:#fff;border-radius:9px">🔊 Call</button>`:""}
         ${order.status==="ready"?`<button onclick="updOrder('${order.id}','collected')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#78716C;color:#fff;border-radius:9px">✓ Collected</button>`:""}
         <button onclick="printTicket(orders.find(x=>x.id==='${order.id}'))" style="padding:11px 20px;font-size:22px;background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:9px">🖨️</button>
         ${order.status!=="cancelled"?`<button onclick="confirmCancelOrder('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:9px">✕ Cancel</button>`:""}
@@ -3056,7 +3063,11 @@ function renderDisplay(paintOnly){
     const fs = Math.max(4, Math.min(22, 44 / Math.max(cols, rows)));
     grid.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
     grid.innerHTML = ready.map(o=>
-      '<div style="background:#16A34A;border-radius:2.2vh;display:flex;align-items:center;justify-content:center;padding:1vh;box-shadow:0 0.6vh 2vh rgba(0,0,0,0.35)">'
+      '<div style="background:' + (o.queueNo === displayHighlight ? '#C4572A' : '#16A34A')
+      + ';border-radius:2.2vh;display:flex;align-items:center;justify-content:center;padding:1vh;'
+      + 'box-shadow:0 0.6vh 2vh rgba(0,0,0,0.35);'
+      + (o.queueNo === displayHighlight ? 'animation:callPulse 0.9s ease-in-out infinite;' : '')
+      + '">'
       + '<span style="font-family:\'Playfair Display\',serif;font-weight:900;font-size:' + fs + 'vh;line-height:1;color:#fff">'
       + fmtQ(o.queueNo) + '</span></div>').join("");
   }
@@ -3077,6 +3088,24 @@ function renderDisplay(paintOnly){
   });
 }
 
+let displayHighlight = null, displayLastCallAt = 0;
+
+function listenForCalls(){
+  if(!isDisplayMode) return;
+  db.ref("queue/call").on("value", snap=>{
+    const v = snap.val();
+    if(!v || !v.at || !v.queueNo) return;
+    if(v.at <= displayLastCallAt) return;   // already handled
+    displayLastCallAt = v.at;
+    // Ignore calls left over from earlier sessions (e.g. display restarted)
+    if(Date.now() - v.at > 60000) return;
+    displayHighlight = v.queueNo;
+    renderDisplay(true);
+    announceReady([v.queueNo]);
+    setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
+  });
+}
+
 function tickDisplayClock(){
   const el = document.getElementById("disp-clock");
   if(el) el.textContent = new Date().toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true});
@@ -3094,6 +3123,7 @@ if(isDisplayMode){
   tickDisplayClock();
   setInterval(tickDisplayClock, 10000);
   renderDisplay(true);
+  listenForCalls();
 }
 
 renderMenu();
