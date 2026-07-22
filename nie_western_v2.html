@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v76</title>
+<title>NIE Western Food v77</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -3153,7 +3153,7 @@ function renderDisplay(paintOnly){
   });
 }
 
-let displayHighlight = null, displayLastCallAt = 0;
+let displayHighlight = null, displayLastCallAt = 0, displayCallInit = false;
 
 let dispVoiceNote = "";
 function setDispVoiceStatus(ok, why){
@@ -3186,17 +3186,27 @@ function listenForCalls(){
   }catch(e){}
   db.ref("queue/call").on("value", snap=>{
     const v = snap.val();
+    // First snapshot = whatever was already stored. Ignore it, then react to
+    // every change after. Deliberately clock-free: kitchen and display tablets
+    // do not share a clock.
+    if(!displayCallInit){
+      displayCallInit = true;
+      displayLastCallAt = (v && v.at) ? v.at : 0;
+      setDispStatus("\u25cf online \u2014 call channel ready", "#16A34A");
+      return;
+    }
     if(!v || !v.at || !v.queueNo) return;
-    if(v.at <= displayLastCallAt) return;   // already handled
+    if(v.at === displayLastCallAt) return;   // no change
     displayLastCallAt = v.at;
-    // Ignore calls left over from earlier sessions (e.g. display restarted)
-    if(Date.now() - v.at > 60000) return;
     displayHighlight = v.queueNo;
     renderDisplay(true);
     announceReady([v.queueNo]);
     setDispStatus("\u25cf called #" + String(v.queueNo).padStart(3,"0") + " at "
       + new Date(v.at).toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true}), "#2563EB");
     setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
+  }, err=>{
+    // e.g. PERMISSION_DENIED if the database rules block "queue"
+    setDispStatus("\u25cf call channel blocked: " + (err && err.code ? err.code : "error"), "#DC2626");
   });
 }
 
