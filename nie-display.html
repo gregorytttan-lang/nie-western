@@ -281,8 +281,8 @@ function speakNumber(queueNo,times){
 setInterval(function(){ if(window.speechSynthesis&&!window.speechSynthesis.speaking) window.speechSynthesis.resume(); },5000);
 
 function fmtQ(n){ return String(n).padStart(3,'0'); }
-function getActive(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='serving';}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_ACTIVE); }
-function getMissed(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='missed';}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_MISSED); }
+function getActive(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='serving'&&kv[1].queueNo!=null;}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_ACTIVE); }
+function getMissed(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='missed'&&kv[1].queueNo!=null;}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_MISSED); }
 
 function idleScreenHtml(){
   return '<div class="empty-state"><div class="empty-icon">&#x1F37D;&#xFE0F;</div><div class="empty-txt">'+(gotData?'Waiting for orders':'Connecting...')+'</div></div>';
@@ -369,6 +369,7 @@ if(db){
         seenAt[id]=Date.now();
         lastCalledAt[id]=e.calledAt;
       }
+      if(e.queueNo==null) return;   // ignore incomplete entries
       var key=id+'_'+e.calledAt;
       if(e.status==='serving'&&!announced[key]){ announced[key]=true; speakNumber(e.queueNo,2); }
     });

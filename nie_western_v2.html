@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v83</title>
+<title>NIE Western Food v84</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase: try gstatic first, fall back to jsdelivr if that CDN is blocked -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -1530,7 +1530,11 @@ function markReady(id, queueNo){
 
 // Re-call a customer who has not turned up — display announces again
 function recallOrder(id, queueNo){
-  db.ref("queue_display").child(id).update({
+  // Write the full record, not a partial update. If the original call failed
+  // (e.g. rules were blocking), the entry may not exist or may be missing
+  // queueNo — an update() would then create a broken entry with no number.
+  db.ref("queue_display").child(id).set({
+    queueNo:  queueNo,
     calledAt: Date.now(),
     status:   "serving"
   }).catch(err=>{
