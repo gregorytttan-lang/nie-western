@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v69</title>
+<title>NIE Western Food v71</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -33,6 +33,32 @@ input{font-family:'DM Sans',sans-serif;outline:none}
   <button onclick="authView('kitchen')" id="nav-kitchen" style="background:transparent;color:#78716C;padding:0 10px;border-bottom:2px solid transparent;font-size:12px;font-weight:400;min-width:72px;position:relative">👨‍🍳 Kitchen<span id="kitchen-badge" class="hidden" style="position:absolute;top:6px;right:4px;background:#DC2626;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center"></span></button>
   <button onclick="authView('admin')" id="nav-admin" style="background:transparent;color:#78716C;padding:0 10px;border-bottom:2px solid transparent;font-size:12px;font-weight:400;min-width:72px">⚙️ Admin</button>
 </nav>
+
+<!-- ══ QUEUE DISPLAY VIEW  (open with ?display=1) ══════════════════════════ -->
+<div id="view-display" class="hidden" style="position:fixed;inset:0;z-index:9500;background:#1C1917;color:#fff;display:flex;flex-direction:column;overflow:hidden">
+  <div style="padding:2.4vh 3vw 1.4vh;border-bottom:2px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div style="font-size:2.6vh;font-weight:800;letter-spacing:0.18em;color:#C4572A;text-transform:uppercase">NIE Western Food</div>
+      <div style="font-size:1.7vh;color:rgba(255,255,255,0.5);margin-top:0.4vh">NIE Canteen &middot; Stall 4</div>
+    </div>
+    <div style="text-align:right">
+      <div id="disp-clock" style="font-size:3.2vh;font-weight:800;line-height:1"></div>
+      <div id="disp-count" style="font-size:1.6vh;color:rgba(255,255,255,0.5);margin-top:0.5vh"></div>
+    </div>
+  </div>
+
+  <div style="padding:1.6vh 3vw 0.6vh;text-align:center">
+    <div style="font-size:3.4vh;font-weight:900;color:#16A34A;letter-spacing:0.05em">🔔 READY TO COLLECT &middot; 可以取餐</div>
+  </div>
+
+  <div id="disp-grid" style="flex:1;display:grid;gap:1.5vh 1.5vw;padding:1.2vh 3vw 3vh;align-content:start;overflow:hidden"></div>
+
+  <div id="disp-sound" onclick="enableDisplaySound()" style="position:absolute;inset:0;background:rgba(28,25,23,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10">
+    <div style="font-size:9vh;margin-bottom:2vh">🔔</div>
+    <div style="font-size:3.2vh;font-weight:800">Tap anywhere to start</div>
+    <div style="font-size:1.9vh;color:rgba(255,255,255,0.55);margin-top:1.2vh">Turns on the beep and voice announcements</div>
+  </div>
+</div>
 
 <!-- MENU VIEW -->
 <div id="view-menu">
@@ -2933,7 +2959,142 @@ ordersRef.on("value", snap=>{
   renderKitchen();
   updateKitchenBadge();
   renderReports();
+  renderDisplay();
 });
+
+// ── QUEUE DISPLAY (?display=1) ───────────────────────────────────────────────
+const isDisplayMode = urlParams.get("display") === "1";
+let displaySoundOn = false, displayFirstPass = true, dispCtx = null, wakeLockRef = null;
+const displayKnownReady = new Set();
+
+function enableDisplaySound(){
+  displaySoundOn = true;
+  const ov = document.getElementById("disp-sound");
+  if(ov) ov.style.display = "none";
+  try{
+    dispCtx = new (window.AudioContext || window.webkitAudioContext)();
+    dispCtx.resume();
+    const o = dispCtx.createOscillator(), g = dispCtx.createGain();
+    o.connect(g); g.connect(dispCtx.destination);
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.3, dispCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, dispCtx.currentTime + 0.25);
+    o.start(); o.stop(dispCtx.currentTime + 0.25);
+  }catch(e){}
+  try{
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0; window.speechSynthesis.speak(u);
+  }catch(e){}
+  requestDisplayWakeLock();
+}
+
+async function requestDisplayWakeLock(){
+  try{ if("wakeLock" in navigator) wakeLockRef = await navigator.wakeLock.request("screen"); }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible" && isDisplayMode) requestDisplayWakeLock();
+});
+
+function displayBeep(){
+  if(!displaySoundOn) return;
+  try{
+    const ctx = dispCtx || new (window.AudioContext || window.webkitAudioContext)();
+    ctx.resume();
+    [0, 280, 560].forEach((delay, i)=>setTimeout(()=>{
+      try{
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = "sine";
+        o.frequency.value = (i === 2) ? 1320 : 990;
+        g.gain.setValueAtTime(1.0, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        o.start(); o.stop(ctx.currentTime + 0.35);
+      }catch(e){}
+    }, delay));
+  }catch(e){}
+}
+
+function announceReady(numbers){
+  if(!displaySoundOn) return;
+  displayBeep();
+  if(!window.speechSynthesis) return;
+  const list = numbers.join(", and ");
+  const msg = "Order number " + list + ", is ready for collection.";
+  setTimeout(()=>{
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(msg);
+      u.rate = 0.85; u.volume = 1;
+      const v = window.speechSynthesis.getVoices().find(x=>x.lang && x.lang.startsWith("en"));
+      if(v) u.voice = v;
+      window.speechSynthesis.speak(u);
+      setTimeout(()=>{
+        const stillReady = orders.some(o=>o.status === "ready" && numbers.indexOf(o.queueNo) !== -1);
+        if(!stillReady) return;
+        try{ window.speechSynthesis.speak(new SpeechSynthesisUtterance(msg)); }catch(e){}
+      }, 4200);
+    }catch(e){}
+  }, 1200);
+}
+
+function renderDisplay(paintOnly){
+  if(!isDisplayMode) return;
+  const grid = document.getElementById("disp-grid");
+  if(!grid) return;
+  const ready = orders.filter(o=>o.status === "ready").sort((a,b)=>a.queueNo - b.queueNo);
+  const n = ready.length;
+
+  const cnt = document.getElementById("disp-count");
+  if(cnt) cnt.textContent = n === 0 ? "No orders ready" : n + (n === 1 ? " order ready" : " orders ready");
+
+  if(n === 0){
+    grid.style.gridTemplateColumns = "1fr";
+    grid.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;text-align:center;color:rgba(255,255,255,0.28);font-size:4vh;font-weight:700;line-height:1.5">Preparing your orders…<br><span style="font-size:3vh">请稍候</span></div>';
+  } else {
+    const cols = n <= 2 ? 1 : n <= 6 ? 2 : n <= 12 ? 3 : 4;
+    const rows = Math.ceil(n / cols);
+    const fs = Math.max(4, Math.min(22, 44 / Math.max(cols, rows)));
+    grid.style.gridTemplateColumns = "repeat(" + cols + ", 1fr)";
+    grid.innerHTML = ready.map(o=>
+      '<div style="background:#16A34A;border-radius:2.2vh;display:flex;align-items:center;justify-content:center;padding:1vh;box-shadow:0 0.6vh 2vh rgba(0,0,0,0.35)">'
+      + '<span style="font-family:\'Playfair Display\',serif;font-weight:900;font-size:' + fs + 'vh;line-height:1;color:#fff">'
+      + fmtQ(o.queueNo) + '</span></div>').join("");
+  }
+
+  // announce numbers that just became ready
+  if(paintOnly) return;              // startup paint: don't touch announce state
+  const nowIds = ready.map(o=>o.id);
+  if(displayFirstPass){
+    nowIds.forEach(id=>displayKnownReady.add(id));
+    displayFirstPass = false;
+  } else {
+    const fresh = ready.filter(o=>!displayKnownReady.has(o.id));
+    fresh.forEach(o=>displayKnownReady.add(o.id));
+    if(fresh.length) announceReady(fresh.map(o=>o.queueNo));
+  }
+  Array.from(displayKnownReady).forEach(id=>{
+    if(nowIds.indexOf(id) === -1) displayKnownReady.delete(id);
+  });
+}
+
+function tickDisplayClock(){
+  const el = document.getElementById("disp-clock");
+  if(el) el.textContent = new Date().toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true});
+}
+
+if(isDisplayMode){
+  const navEl = document.querySelector("nav");
+  if(navEl) navEl.style.display = "none";
+  ["menu","kitchen","admin"].forEach(x=>{
+    const el = document.getElementById("view-" + x);
+    if(el) el.classList.add("hidden");
+  });
+  const dv = document.getElementById("view-display");
+  if(dv) dv.classList.remove("hidden");
+  tickDisplayClock();
+  setInterval(tickDisplayClock, 10000);
+  renderDisplay(true);
+}
 
 renderMenu();
 updateKitchenBadge();
