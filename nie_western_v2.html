@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v73</title>
+<title>NIE Western Food v75</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -45,6 +45,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <div style="text-align:right">
       <div id="disp-clock" style="font-size:3.2vh;font-weight:800;line-height:1"></div>
       <div id="disp-count" style="font-size:1.6vh;color:rgba(255,255,255,0.5);margin-top:0.5vh"></div>
+      <div id="disp-status" style="font-size:1.4vh;margin-top:0.5vh;color:rgba(255,255,255,0.45)">connecting…</div>
     </div>
   </div>
 
@@ -1495,8 +1496,22 @@ function updOrder(id, status){
 }
 
 function callOrder(queueNo){
-  try{ db.ref("queue/call").set({ queueNo: queueNo, at: Date.now() }); }catch(e){}
-  toast("\ud83d\udd0a Calling #" + String(queueNo).padStart(3,"0"), "#2563EB");
+  const label = "#" + String(queueNo).padStart(3,"0");
+  try{
+    const p = db.ref("queue/call").set({ queueNo: queueNo, at: Date.now() });
+    if(p && p.then){
+      p.then(()=>toast("\ud83d\udd0a Called " + label, "#2563EB"))
+       .catch(err=>{
+         console.error("Call failed:", err);
+         alert("Could not send the call.\n\nError: " + (err && err.message ? err.message : err)
+               + "\n\nThis usually means the Firebase database rules are blocking writes to \"queue\".");
+       });
+    } else {
+      toast("\ud83d\udd0a Called " + label, "#2563EB");
+    }
+  }catch(e){
+    alert("Could not send the call.\n\nError: " + e.message);
+  }
 }
 
 function confirmCancelOrder(orderId){
@@ -3005,43 +3020,83 @@ document.addEventListener("visibilitychange", ()=>{
 function displayBeep(){
   if(!displaySoundOn) return;
   try{
-    const ctx = dispCtx || new (window.AudioContext || window.webkitAudioContext)();
-    ctx.resume();
-    [0, 280, 560].forEach((delay, i)=>setTimeout(()=>{
-      try{
-        const o = ctx.createOscillator(), g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination);
-        o.type = "sine";
-        o.frequency.value = (i === 2) ? 1320 : 990;
-        g.gain.setValueAtTime(1.0, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        o.start(); o.stop(ctx.currentTime + 0.35);
-      }catch(e){}
-    }, delay));
+    if(!dispCtx) dispCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = dispCtx;
+    const fire = ()=>{
+      [0, 280, 560].forEach((delay, i)=>setTimeout(()=>{
+        try{
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = "sine";
+          o.frequency.value = (i === 2) ? 1320 : 990;
+          g.gain.setValueAtTime(1.0, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          o.start(); o.stop(ctx.currentTime + 0.35);
+        }catch(e){}
+      }, delay));
+    };
+    // Android suspends the audio context in the background — resume before playing
+    if(ctx.state === "suspended"){ ctx.resume().then(fire).catch(()=>{}); }
+    else { fire(); }
   }catch(e){}
+}
+
+// Chrome on Android stalls its speech engine after repeated use.
+// This keeps it alive and retries once if an utterance never starts.
+let speechWatchdog = null, announceTimers = [];
+
+function startSpeechWatchdog(){
+  if(speechWatchdog || !window.speechSynthesis) return;
+  speechWatchdog = setInterval(()=>{
+    try{
+      const s = window.speechSynthesis;
+      if(s && (s.speaking || s.pending)) s.resume();
+    }catch(e){}
+  }, 4000);
+}
+
+function speakOnDisplay(msg, attempt){
+  const s = window.speechSynthesis;
+  if(!s){ displayBeep(); return; }
+  attempt = attempt || 0;
+  try{ s.cancel(); }catch(e){}
+  setTimeout(()=>{
+    try{
+      const u = new SpeechSynthesisUtterance(msg);
+      u.rate = 0.85; u.volume = 1;
+      const v = s.getVoices().find(x=>x.lang && x.lang.startsWith("en"));
+      if(v) u.voice = v;
+      let started = false;
+      u.onstart = ()=>{ started = true; };
+      u.onerror = ()=>{ displayBeep(); };
+      s.speak(u);
+      try{ s.resume(); }catch(e){}
+      setTimeout(()=>{
+        if(started) return;
+        if(attempt < 1){                 // engine stalled — hard reset and retry once
+          try{ s.cancel(); }catch(e){}
+          speakOnDisplay(msg, attempt + 1);
+        } else {
+          displayBeep();                 // give up on voice, at least beep
+        }
+      }, 1700);
+    }catch(e){ displayBeep(); }
+  }, 260);
 }
 
 function announceReady(numbers){
   if(!displaySoundOn) return;
+  // cancel any repeat still queued from an earlier call so they don't overlap
+  announceTimers.forEach(t=>clearTimeout(t));
+  announceTimers = [];
+  startSpeechWatchdog();
   displayBeep();
-  if(!window.speechSynthesis) return;
-  const list = numbers.join(", and ");
-  const msg = "Order number " + list + ", is ready for collection.";
-  setTimeout(()=>{
-    try{
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(msg);
-      u.rate = 0.85; u.volume = 1;
-      const v = window.speechSynthesis.getVoices().find(x=>x.lang && x.lang.startsWith("en"));
-      if(v) u.voice = v;
-      window.speechSynthesis.speak(u);
-      setTimeout(()=>{
-        const stillReady = orders.some(o=>o.status === "ready" && numbers.indexOf(o.queueNo) !== -1);
-        if(!stillReady) return;
-        try{ window.speechSynthesis.speak(new SpeechSynthesisUtterance(msg)); }catch(e){}
-      }, 4200);
-    }catch(e){}
-  }, 1200);
+  const msg = "Order number " + numbers.join(", and ") + ", is ready for collection.";
+  announceTimers.push(setTimeout(()=>speakOnDisplay(msg), 1200));
+  announceTimers.push(setTimeout(()=>{
+    const stillReady = orders.some(o=>o.status === "ready" && numbers.indexOf(o.queueNo) !== -1);
+    if(stillReady) speakOnDisplay(msg);
+  }, 5400));
 }
 
 function renderDisplay(paintOnly){
@@ -3090,8 +3145,20 @@ function renderDisplay(paintOnly){
 
 let displayHighlight = null, displayLastCallAt = 0;
 
+function setDispStatus(txt, colour){
+  const el = document.getElementById("disp-status");
+  if(el){ el.textContent = txt; el.style.color = colour || "rgba(255,255,255,0.45)"; }
+}
+
 function listenForCalls(){
   if(!isDisplayMode) return;
+  // connection indicator
+  try{
+    db.ref(".info/connected").on("value", s=>{
+      setDispStatus(s.val() ? "\u25cf online" : "\u25cf offline \u2014 check WiFi",
+                    s.val() ? "#16A34A" : "#DC2626");
+    });
+  }catch(e){}
   db.ref("queue/call").on("value", snap=>{
     const v = snap.val();
     if(!v || !v.at || !v.queueNo) return;
@@ -3102,6 +3169,8 @@ function listenForCalls(){
     displayHighlight = v.queueNo;
     renderDisplay(true);
     announceReady([v.queueNo]);
+    setDispStatus("\u25cf called #" + String(v.queueNo).padStart(3,"0") + " at "
+      + new Date(v.at).toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true}), "#2563EB");
     setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
   });
 }
