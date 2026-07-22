@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v77</title>
+<title>NIE Western Food v79</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -3009,15 +3009,41 @@ function enableDisplaySound(){
     const u = new SpeechSynthesisUtterance(" ");
     u.volume = 0; window.speechSynthesis.speak(u);
   }catch(e){}
+  startAudioKeepAlive();
   requestDisplayWakeLock();
+}
+
+// An always-on, inaudible tone. Android keeps pages with active audio alive,
+// and it stops the AudioContext going to sleep between beeps.
+let keepAliveNode = null;
+function startAudioKeepAlive(){
+  try{
+    if(!dispCtx) dispCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(keepAliveNode) return;
+    const o = dispCtx.createOscillator(), g = dispCtx.createGain();
+    o.connect(g); g.connect(dispCtx.destination);
+    o.frequency.value = 60;
+    g.gain.value = 0.0001;          // effectively silent
+    o.start();
+    keepAliveNode = o;
+  }catch(e){}
 }
 
 async function requestDisplayWakeLock(){
   try{ if("wakeLock" in navigator) wakeLockRef = await navigator.wakeLock.request("screen"); }catch(e){}
 }
 document.addEventListener("visibilitychange", ()=>{
-  if(document.visibilityState === "visible" && isDisplayMode) requestDisplayWakeLock();
+  if(document.visibilityState === "visible" && isDisplayMode){
+    requestDisplayWakeLock();
+    try{ if(dispCtx && dispCtx.state === "suspended") dispCtx.resume(); }catch(e){}
+  }
 });
+// Some Android builds drop the wake lock without telling us — re-request it
+setInterval(()=>{
+  if(!isDisplayMode) return;
+  if(!wakeLockRef || wakeLockRef.released) requestDisplayWakeLock();
+  try{ if(dispCtx && dispCtx.state === "suspended") dispCtx.resume(); }catch(e){}
+}, 30000);
 
 function displayBeep(){
   if(!displaySoundOn) return;
@@ -3153,7 +3179,7 @@ function renderDisplay(paintOnly){
   });
 }
 
-let displayHighlight = null, displayLastCallAt = 0, displayCallInit = false;
+let displayHighlight = null, displayLastCallAt = 0, displayCallInit = false, displayCallCount = 0;
 
 let dispVoiceNote = "";
 function setDispVoiceStatus(ok, why){
@@ -3201,8 +3227,9 @@ function listenForCalls(){
     displayHighlight = v.queueNo;
     renderDisplay(true);
     announceReady([v.queueNo]);
-    setDispStatus("\u25cf called #" + String(v.queueNo).padStart(3,"0") + " at "
-      + new Date(v.at).toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true}), "#2563EB");
+    displayCallCount++;
+    setDispStatus("\u25cf calls received: " + displayCallCount
+      + "  (last #" + String(v.queueNo).padStart(3,"0") + ")", "#2563EB");
     setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
   }, err=>{
     // e.g. PERMISSION_DENIED if the database rules block "queue"
@@ -3212,7 +3239,8 @@ function listenForCalls(){
 
 function tickDisplayClock(){
   const el = document.getElementById("disp-clock");
-  if(el) el.textContent = new Date().toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true});
+  if(el) el.textContent = new Date().toLocaleTimeString("en-SG",
+    {hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true});
 }
 
 if(isDisplayMode){
@@ -3225,7 +3253,7 @@ if(isDisplayMode){
   const dv = document.getElementById("view-display");
   if(dv) dv.classList.remove("hidden");
   tickDisplayClock();
-  setInterval(tickDisplayClock, 10000);
+  setInterval(tickDisplayClock, 1000);
   renderDisplay(true);
   listenForCalls();
 }
