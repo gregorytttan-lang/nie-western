@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v63</title>
+<title>NIE Western Food v65</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -58,7 +58,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <div style="font-size:12px;color:#78716C;margin-top:2px;margin-bottom:10px">Self-order · NETS/PayNow · Self-collection</div>
       <div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#92400E;display:flex;align-items:center;gap:8px">
         <span>📞</span>
-        <span>Special order? Call <strong>Gregory 90628726</strong></span>
+        <span><span id="txt-special-order">Special order? Call <strong>Gregory 90628726</strong></span></span>
       </div>
     </div>
     <div id="cat-tabs" style="display:flex;overflow-x:auto;scrollbar-width:none;padding:0 12px"></div>
@@ -287,13 +287,13 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 
   <!-- Sound enable button -->
   <div id="sound-enable-bar" style="background:#F59E0B;padding:14px 20px;text-align:center;cursor:pointer;" onclick="enableCustomerSound()">
-    <div style="font-size:16px;font-weight:800;color:#1C1917;">🔔 Tap here to enable sound alert</div>
-    <div style="font-size:12px;color:rgba(0,0,0,0.6);margin-top:3px;">So we can beep your phone when food is ready!</div>
+    <div style="font-size:16px;font-weight:800;color:#1C1917;" id="txt-sound-enable">🔔 Tap here to enable sound alert</div>
+    <div style="font-size:12px;color:rgba(0,0,0,0.6);margin-top:3px;" id="txt-sound-sub">So we can beep your phone when food is ready!</div>
   </div>
 
   <!-- Status Bar -->
   <div id="order-tracking-bar" style="background:#252220;padding:16px 20px;">
-    <div style="font-size:11px;color:#C4572A;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:14px;text-align:center">📱 Keep this page open to track your order</div>
+    <div style="font-size:11px;color:#C4572A;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:14px;text-align:center"><span id="txt-keep-open">📱 Keep this page open to track your order</span></div>
     <div id="order-status-bar" style="display:flex;align-items:center;justify-content:center;gap:0">
       <!-- Steps rendered by updateStatusUI -->
     </div>
@@ -309,7 +309,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 
   <!-- Screenshot notice -->
   <div style="background:#2D2116;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.08)">
-    <div style="font-size:12px;color:#F59E0B;font-weight:600;text-align:center">📸 Screenshot your bank payment confirmation as proof of payment</div>
+    <div style="font-size:12px;color:#F59E0B;font-weight:600;text-align:center" id="txt-screenshot">📸 Screenshot your bank payment confirmation as proof of payment</div>
   </div>
 
   <!-- Close button -->
@@ -341,6 +341,157 @@ const CONFIG = {
 // Aliases for backward compat
 const STAFF_PWD  = CONFIG.STAFF_PWD;
 const SHEETS_URL = CONFIG.SHEETS_URL;
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── CHINESE TRANSLATION ─────────────────────────────────────────────────────
+const LANG = new URLSearchParams(window.location.search).get("lang") || "en";
+const CN = {
+  // Categories
+  cat: {
+    "Shawarma":"沙威玛", "Chicken Mains":"鸡肉主食", "Fish Mains":"鱼肉主食",
+    "Spaghetti":"意大利面", "Snacks & Sides":"小吃 & 配菜", "Breakfast":"早餐", "Add-ons":"加料"
+  },
+  // Menu items
+  item: {
+    "Mixed Shawarma Combo (Rice & Fries)":"什锦沙威玛套餐（饭和薯条）",
+    "Mixed Shawarma (Beef & Chicken)":"什锦沙威玛（牛肉和鸡肉）",
+    "Mixed Shawarma with Rice":"什锦沙威玛配饭",
+    "Mixed Shawarma with Fries":"什锦沙威玛配薯条",
+    "Beef Shawarma Combo (Rice & Fries)":"牛肉沙威玛套餐（饭和薯条）",
+    "Chicken Shawarma Combo (Rice & Fries)":"鸡肉沙威玛套餐（饭和薯条）",
+    "Beef Shawarma":"牛肉沙威玛",
+    "Beef Shawarma with Rice":"牛肉沙威玛配饭",
+    "Beef Shawarma with Fries":"牛肉沙威玛配薯条",
+    "Beef Shawarma with Salad":"牛肉沙威玛配沙拉",
+    "Chicken Shawarma":"鸡肉沙威玛",
+    "Chicken Shawarma with Rice":"鸡肉沙威玛配饭",
+    "Chicken Shawarma with Fries":"鸡肉沙威玛配薯条",
+    "Chicken Shawarma with Salad":"鸡肉沙威玛配沙拉",
+    "Garlic Soya Korean Fried Chicken with Spaghetti":"蒜蓉酱油韩式炸鸡配意大利面",
+    "Sweet Spicy Korean Fried Chicken (Spaghetti & Salad)":"甜辣韩式炸鸡（意面和沙拉）",
+    "Hawaiian Chicken Chop (Mashed & Salad)":"夏威夷鸡排（土豆泥和沙拉）",
+    "Mexican Chicken Chop (Mashed, Salad & Nacho Cheese)":"墨西哥鸡排（土豆泥、沙拉和芝士酱）",
+    "Mexican Chicken Cutlet (Fries, Salad & Nacho Cheese)":"墨西哥鸡扒（薯条、沙拉和芝士酱）",
+    "Garlic Soya Korean Fried Chicken (Fries & Salad)":"蒜蓉酱油韩式炸鸡（薯条和沙拉）",
+    "Sweet Spicy Korean Fried Chicken (Fries)":"甜辣韩式炸鸡（薯条）",
+    "Sweet Spicy Korean Fried Chicken (Rice)":"甜辣韩式炸鸡（饭）",
+    "Sweet Spicy Korean Fried Chicken (Rice & Salad)":"甜辣韩式炸鸡（饭和沙拉）",
+    "Black Pepper Chicken (Rice & Salad)":"黑胡椒鸡肉（饭和沙拉）",
+    "Mushroom Sauce Chicken (Rice & Salad)":"蘑菇酱鸡肉（饭和沙拉）",
+    "Chicken Chop (Mashed & Salad)":"鸡排（土豆泥和沙拉）",
+    "Chicken Cutlet (Fries & Salad)":"鸡扒（薯条和沙拉）",
+    "Grilled Fish (Spaghetti & Salad)":"烤鱼（意面和沙拉）",
+    "Grilled Fish (Cheese Fries & Salad)":"烤鱼（芝士薯条和沙拉）",
+    "Mexican Fish & Chips (Salad & Nacho Cheese)":"墨西哥炸鱼薯条（沙拉和芝士酱）",
+    "Grilled Fish (Fries & Salad)":"烤鱼（薯条和沙拉）",
+    "Grilled Fish (Mashed Potato & Salad)":"烤鱼（土豆泥和沙拉）",
+    "Grilled Fish Butter Rice (Salad)":"烤鱼黄油饭（沙拉）",
+    "Fish & Chips":"炸鱼薯条",
+    "Tempura Fish & Chips":"天妇罗炸鱼薯条",
+    "Tempura Fish":"天妇罗鱼",
+    "Garden Salad":"花园沙拉",
+    "Mushroom Soup":"蘑菇汤",
+    "Spaghetti Chicken Bolognese":"鸡肉肉酱意大利面",
+    "Spaghetti Mushroom Cream":"蘑菇奶油意大利面",
+    "Cheese Fries":"芝士薯条",
+    "Fries":"薯条",
+    "Mozzarella Cheese Sticks":"马苏里拉芝士条",
+    "Popcorn Chicken":"爆米花鸡",
+    "Chicken Nuggets (6 pcs)":"鸡块（6块）",
+    "Spicy Chicken Nuggets (5 pcs)":"辣鸡块（5块）",
+    "Potato Apple Salad":"土豆苹果沙拉",
+    "Chicken Cheese Hotdog Bun":"鸡肉芝士热狗面包",
+    "Korean Sandwich":"韩式三明治",
+    "Chicken Burger":"鸡肉汉堡",
+    "Chicken Cheese Sausage":"鸡肉芝士香肠",
+    "Fish Burger":"鱼肉汉堡",
+    "Hash Browns (3 pcs)":"薯饼（3块）",
+    "Onion Rings":"洋葱圈",
+    "Sandwich":"三明治",
+    "Omelette Breakfast Set":"煎蛋早餐套餐",
+    "Toast Breakfast Set":"吐司早餐套餐",
+    "Scrambled Egg Breakfast Set":"炒蛋早餐套餐",
+    "Add Grilled Fish":"加烤鱼",
+    "Add Chicken Chop":"加鸡排",
+    "Add Chicken Cutlet":"加鸡扒",
+    "Add Fried Fish":"加炸鱼",
+    "Add Chicken Shawarma":"加鸡肉沙威玛",
+    "Add Spaghetti":"加意大利面",
+    "Add Cheese Sauce":"加芝士酱",
+    "Add Sunny Side Up Egg":"加太阳蛋",
+    "Add Fries":"加薯条",
+    "Add Mashed Potato":"加土豆泥",
+    "Add Rice":"加饭",
+    "Add Salad":"加沙拉",
+    "Take-Away Packaging":"外带包装",
+    "Take-Away (Bring Your Own Box)":"外带（自带饭盒）",
+  },
+  // UI labels
+  ui: {
+    "NIE Western Food":"NIE 西餐",
+    "NIE Canteen":"NIE 食堂",
+    "Scan QR to Order":"扫码点餐",
+    "We Are Closed":"我们已关闭",
+    "Thank you for visiting! See you soon":"感谢光临！下次再见",
+    "Opening hours":"营业时间",
+    "Your Cart":"您的购物车",
+    "Dine In":"堂食",
+    "Take Away":"外带",
+    "Pay Now":"去付款",
+    "Cart is empty":"购物车是空的",
+    "Close":"关闭",
+    "Remove":"删除",
+    "Total":"合计",
+    "Order Confirmed":"订单已确认",
+    "Queue No.":"排队号",
+    "Keep this page open to track your order":"请保持此页面打开以跟踪您的订单",
+    "Order Received":"已收到订单",
+    "Ready for Pickup!":"可以取餐了！",
+    "Collected":"已取餐",
+    "Close & New Order":"关闭并下新订单",
+    "Screenshot your bank payment confirmation as proof of payment":"请截图您的付款确认作为付款证明",
+    "Tap here to enable sound alert":"点击此处启用声音提醒",
+    "So we can beep your phone when food is ready!":"食物准备好时我们会提醒您！",
+    "Sound Alert Enabled":"声音提醒已开启",
+    "We will beep your phone when food is ready!":"食物准备好时会提醒您！",
+    "Order Cancelled":"订单已取消",
+    "If you did not request this cancellation, please approach our staff at the counter for assistance.":"如果您没有要求取消，请到柜台找我们的工作人员协助。",
+    "Want to add a side?":"要加配菜吗？",
+    "Choose your Spaghetti Sauce":"选择您的意面酱",
+    "Chicken Bolognese":"鸡肉肉酱",
+    "Mushroom Cream":"蘑菇奶油",
+    "No Thanks":"不用了",
+    "Add to Order":"加入订单",
+    "Special order? Call":"特别订单？请致电",
+    "You have an active order":"您有一个活跃的订单",
+    "Tap to view your order status":"点击查看您的订单状态",
+    "Your Active Orders":"您的活跃订单",
+    "Please pay cash at the counter and show this screen":"请到柜台付现金并出示此画面",
+    "I Have Paid":"我已付款",
+    "Remarks":"备注",
+    "Add remarks here...":"在此添加备注...",
+    "+ Spaghetti — Chicken Bolognese":"+ 意面 — 鸡肉肉酱",
+    "+ Spaghetti — Mushroom Cream":"+ 意面 — 蘑菇奶油",
+    "+ Butter Rice":"+ 黄油饭",
+    "+ Crispy Fries":"+ 脆薯条",
+    "+ Cheese Sauce":"+ 芝士酱",
+    "+ Sunny Side Up Egg":"+ 太阳蛋",
+    "items in cart":"件商品在购物车中",
+    "Mon – Fri":"周一至周五",
+    "SOLD OUT":"已售罄",
+    "Add to cart first":"请先加入购物车",
+  }
+};
+
+// Translation helper — returns Chinese if lang=cn, else English
+function T(text){
+  if(LANG!=="cn") return text;
+  return CN.item[text] || CN.ui[text] || CN.cat[text] || text;
+}
+function Tcat(catName){
+  if(LANG!=="cn") return catName;
+  return CN.cat[catName] || catName;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PAYNOW_UEN = "+6581612943";
@@ -1818,7 +1969,7 @@ function updateStatusUI(status){
   // Show cancelled on customer screen
   if(status === "cancelled"){
     document.getElementById("queue-number").textContent = "✕";
-    document.getElementById("queue-dining").textContent = "If you did not request this cancellation, please approach our staff at the counter for assistance.";
+    document.getElementById("queue-dining").textContent = T("If you did not request this cancellation, please approach our staff at the counter for assistance.");
     const qLabel = document.getElementById("queue-no-label");
     if(qLabel){ qLabel.textContent = "❌ Order Cancelled"; qLabel.style.color="#DC2626"; }
     const trackBar = document.getElementById("order-tracking-bar");
@@ -1961,10 +2112,10 @@ function saveDailyToSheets(){
   // Save daily sales first, then save all payouts
   fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(data)})
     .then(()=>{
-      // Now save all payouts
-      const payouts = ls("payouts_nie",[]);
-      if(payouts.length){
-        const payoutPromises = payouts.map(p=>{
+      // Save only TODAY's payouts (not all-time, avoids duplicates)
+      const todayPayouts3 = ls("payouts_nie",[]).filter(p=>p.date===new Date().toISOString().slice(0,10));
+      if(todayPayouts3.length){
+        const payoutPromises = todayPayouts3.map(p=>{
           const pd = {type:"payout", date:p.date, supplier:p.supplier, item:p.item, amount:p.amount, notes:p.notes||""};
           return fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(pd)});
         });
