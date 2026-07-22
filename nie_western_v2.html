@@ -4,10 +4,21 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v81</title>
+<title>NIE Western Food v83</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Firebase: try gstatic first, fall back to jsdelivr if that CDN is blocked -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script>
+if (typeof firebase === "undefined") {
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"><\/scr' + 'ipt>');
+}
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+if (typeof firebase === "undefined" || !firebase.database) {
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"><\/scr' + 'ipt>');
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -2759,6 +2770,20 @@ function testPrint(){
 // ── INIT ──────────────────────────────────────────────────────────────────────
 
 // ── FIREBASE REALTIME SYNC ────────────────────────────────────────────────────
+if (typeof firebase === "undefined" || !firebase.database) {
+  document.body.innerHTML =
+    '<div style="font-family:sans-serif;padding:40px;text-align:center;color:#1C1917">'
+    + '<div style="font-size:56px;margin-bottom:16px">\uD83D\uDCF6</div>'
+    + '<div style="font-size:22px;font-weight:700;margin-bottom:10px">Cannot reach the internet</div>'
+    + '<div style="font-size:15px;color:#78716C;line-height:1.6">'
+    + 'This device could not load Firebase.<br>'
+    + 'Check the WiFi / hotspot is connected, then reload this page.</div>'
+    + '<button onclick="location.reload()" style="margin-top:24px;background:#C4572A;color:#fff;'
+    + 'border:none;border-radius:12px;padding:14px 28px;font-size:16px;font-weight:700">Reload</button>'
+    + '</div>';
+  throw new Error("Firebase SDK failed to load");
+}
+
 const FB_CONFIG = {
   apiKey:            "AIzaSyBrHuYcjnClmxjzA2RITIVuJQ-LwCCC47E",
   authDomain:        "nie-western-pos.firebaseapp.com",
@@ -2999,7 +3024,10 @@ ordersRef.on("value", snap=>{
 });
 
 // ── QUEUE DISPLAY (?display=1) ───────────────────────────────────────────────
-const isDisplayMode = urlParams.get("display") === "1";
+// The queue display now lives in its own file (nie-display.html), the same
+// way it does for W06. Redirect anyone still using the old ?display=1 link.
+if(urlParams.get("display") === "1"){ window.location.replace("nie-display.html"); }
+const isDisplayMode = false;
 let displaySoundOn = false, displayFirstPass = true, dispCtx = null, wakeLockRef = null;
 const displayKnownReady = new Set();
 
