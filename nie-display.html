@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="google" content="notranslate">
+<title>Queue Display — NIE Western Food</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Firebase: gstatic first, fall back to jsdelivr if that CDN is blocked -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script>
+if (typeof firebase === 'undefined') {
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"><\/scr' + 'ipt>');
+}
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+if (typeof firebase === 'undefined' || !firebase.database) {
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"><\/scr' + 'ipt>');
+}
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden}
+body{background:#0A0908;font-family:'DM Sans',sans-serif;color:#FAF9F7;-webkit-user-select:none;user-select:none}
+
+#scale-host{position:fixed;inset:0;background:#0A0908;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#canvas{width:1280px;height:800px;flex-shrink:0;transform-origin:center center;display:flex;flex-direction:column;background:#0A0908;overflow:hidden}
+
+.hdr{background:linear-gradient(135deg,#1C1410 0%,#0F0D0B 100%);border-bottom:2px solid #C4572A;padding:0 36px;height:172px;flex-shrink:0;display:flex;align-items:center}
+.hdr-logo{display:flex;flex-direction:column;gap:6px;min-width:340px;flex-shrink:0}
+.hdr-brand{font-family:'Playfair Display',serif;font-size:48px;font-weight:800;color:#FAF9F7;letter-spacing:0.02em;white-space:nowrap}
+.hdr-brand .accent{color:#C4572A}
+.hdr-stall{font-size:18px;color:#8A7A6E;font-weight:500;display:flex;align-items:center;gap:8px}
+.conn-dot{width:13px;height:13px;border-radius:50%;background:#16A34A;box-shadow:0 0 6px #16A34A;display:inline-block;flex-shrink:0;transition:background .4s,box-shadow .4s}
+.hdr-div{width:1px;background:#3A2A1A;margin:14px 24px;align-self:stretch}
+.hdr-msg{flex:1;text-align:center;padding:0 16px}
+.hdr-collect{font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:#E8C547;line-height:1.2}
+.hdr-collect-sub{font-size:18px;color:#8A7A6E;margin-top:6px;font-weight:500;line-height:1.3}
+.hdr-clock{text-align:right;min-width:210px;flex-shrink:0}
+.hdr-time{font-family:'Playfair Display',serif;font-size:56px;font-weight:700;color:#FAF9F7;letter-spacing:0.04em;line-height:1}
+.hdr-date{font-size:17px;color:#8A7A6E;margin-top:5px;font-weight:500}
+
+.main{flex:1;display:flex;flex-direction:row;min-height:0;overflow:hidden}
+.serving-zone{flex:1;display:flex;flex-direction:column;padding:18px 26px;min-height:0;overflow:hidden}
+.zone-lbl{font-size:18px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;color:#8A7A6E;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.lbl-pulse{width:12px;height:12px;border-radius:50%;background:#E8C547;animation:dotPulse 1.6s ease-in-out infinite;box-shadow:0 0 10px #E8C547}
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.65)}}
+.serving-grid{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:18px;flex:1;align-content:stretch}
+.serving-grid.has-1{grid-template-columns:1fr;grid-template-rows:1fr}
+.serving-grid.has-2{grid-template-columns:repeat(2,1fr);grid-template-rows:1fr}
+.serving-grid.has-3{grid-template-rows:auto auto}
+
+.s-card{background:linear-gradient(155deg,#1C1612 0%,#110D09 100%);border:2px solid #221A10;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 8px;position:relative;overflow:hidden}
+.s-card.active{border-color:#352618;animation:cardIn .45s cubic-bezier(.34,1.56,.64,1) both,borderGlow 3s ease-in-out infinite}
+.s-card.empty{border:2px dashed #221A10;background:transparent;opacity:.5}
+.card-radial{position:absolute;top:-70px;left:50%;transform:translateX(-50%);width:340px;height:340px;background:radial-gradient(circle,rgba(232,197,71,.07) 0%,transparent 65%);border-radius:50%;pointer-events:none}
+@keyframes cardIn{from{transform:scale(.72) translateY(-18px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+@keyframes borderGlow{0%,100%{box-shadow:0 0 0 0 rgba(232,197,71,0)}50%{box-shadow:0 0 40px 4px rgba(232,197,71,.09),inset 0 0 50px rgba(0,0,0,.2)}}
+.q-hash{font-size:32px;color:#2D5A3E;font-weight:600;font-family:'Playfair Display',serif;line-height:1;margin-bottom:-8px}
+.q-num{font-family:'Playfair Display',serif;font-size:230px;font-weight:800;color:#4ADE80;line-height:.9;letter-spacing:-.04em;animation:shimmerGreen 2.8s ease-in-out infinite}
+.serving-grid.has-1 .q-num{font-size:340px}
+.serving-grid.has-2 .q-num{font-size:280px}
+.s-card.empty .q-num{display:none}
+@keyframes shimmerGreen{0%,100%{text-shadow:0 0 25px rgba(74,222,128,.4),0 0 50px rgba(74,222,128,.2)}50%{text-shadow:0 0 60px rgba(74,222,128,.9),0 0 110px rgba(74,222,128,.35)}}
+
+.ring-wrap{position:relative;margin-top:18px;flex-shrink:0}
+.ring-wrap svg{display:block;width:82px;height:82px}
+.ring-secs{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#4ADE80;transition:color .3s}
+.ring-secs.urgent{color:#DC2626;animation:urgentBlink .55s ease-in-out infinite}
+@keyframes urgentBlink{0%,100%{opacity:1}50%{opacity:.25}}
+
+.missed-zone{flex:0 0 25%;background:linear-gradient(180deg,#0F0A06 0%,#0A0705 100%);border-right:3px solid #DC2626;padding:22px;display:flex;flex-direction:column;gap:18px;overflow:hidden}
+.missed-lbl{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:14px;flex-shrink:0;padding-bottom:14px;border-bottom:1px solid #4A2A08}
+.missed-lbl-icon{font-size:42px}
+.missed-lbl-txt{font-size:28px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#DC2626;line-height:1;text-align:center}
+.missed-chips{display:flex;flex-direction:column;gap:18px;flex:1;overflow:hidden}
+.m-chip{background:#0A1F0A;border:4px solid #DC2626;border-radius:20px;padding:12px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:0;animation:chipIn .4s ease both,missedPulse 2s ease-in-out infinite}
+@keyframes chipIn{from{transform:translateX(-20px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes missedPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}50%{box-shadow:0 0 28px 3px rgba(220,38,38,.35)}}
+.m-hash{font-size:34px;color:#2D5A3E;font-weight:600;line-height:1;font-family:'Playfair Display',serif;margin-bottom:-6px}
+.m-num{font-family:'Playfair Display',serif;font-size:130px;font-weight:800;color:#4ADE80;line-height:.95;letter-spacing:-.03em;text-shadow:0 0 30px rgba(74,222,128,.45)}
+.m-time{font-size:15px;color:#92400E;line-height:1.3;font-weight:600;text-align:center;margin-top:4px}
+.no-missed{font-size:22px;color:#3A2A1A;font-weight:600;text-align:center;padding:40px 10px;letter-spacing:.04em}
+
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;grid-column:1/-1;height:100%;gap:16px;opacity:.35}
+.empty-icon{font-size:80px}
+.empty-txt{font-size:24px;color:#8A7A6E;font-weight:600;letter-spacing:.02em}
+</style>
+</head>
+<body>
+
+<div id="scale-host">
+<div id="canvas">
+
+<div class="hdr">
+  <div class="hdr-logo">
+    <div class="hdr-brand">🍽️ <span class="accent">NIE</span> WESTERN</div>
+    <div class="hdr-stall">
+      <span class="conn-dot" id="conn-dot"></span>
+      NIE Canteen · Stall 4
+    </div>
+  </div>
+  <div class="hdr-div"></div>
+  <div class="hdr-msg">
+    <div class="hdr-collect">Please collect your food at the counter</div>
+    <div class="hdr-collect-sub">Watch for your queue number below · 请到柜台领取您的食物</div>
+  </div>
+  <div class="hdr-div"></div>
+  <div class="hdr-clock">
+    <div class="hdr-time" id="clock">--:--</div>
+    <div class="hdr-date" id="clock-date"></div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="missed-zone">
+    <div class="missed-lbl">
+      <div class="missed-lbl-icon">⚠️</div>
+      <div class="missed-lbl-txt">MISSED</div>
+    </div>
+    <div class="missed-chips" id="missed-chips">
+      <div class="no-missed">No missed numbers</div>
+    </div>
+  </div>
+  <div class="serving-zone">
+    <div class="zone-lbl">
+      <div class="lbl-pulse"></div>
+      NOW SERVING
+    </div>
+    <div class="serving-grid" id="serving-grid"></div>
+  </div>
+</div>
+
+</div></div>
+
+<div id="diag-bar" style="position:fixed;bottom:0;left:0;right:0;z-index:999999;background:#1C1A08;color:#E8C547;font-size:12px;font-family:monospace;font-weight:bold;padding:7px 16px;border-top:2px solid #E8C547;white-space:nowrap;overflow:hidden">Loading...</div>
+
+<script>
+function fitCanvas(){
+  var canvas=document.getElementById('canvas'); if(!canvas) return;
+  var scale=Math.min(window.innerWidth/1280, window.innerHeight/800)*0.985;
+  canvas.style.transform='scale('+scale+')';
+}
+window.addEventListener('resize', fitCanvas);
+window.addEventListener('orientationchange', function(){ setTimeout(fitCanvas,150); });
+fitCanvas();
+
+function diag(msg,bg){
+  var b=document.getElementById('diag-bar'); if(!b) return;
+  b.textContent=msg; if(bg) b.style.background=bg;
+  if(msg.indexOf('Step 4')===0 && msg.indexOf('serving=')!==-1){
+    setTimeout(function(){ if(b) b.style.display='none'; },3000);
+  } else { b.style.display='block'; }
+}
+diag('Step 1: JS running...');
+
+var FB = {
+  apiKey:            "AIzaSyBrHuYcjnClmxjzA2RITIVuJQ-LwCCC47E",
+  authDomain:        "nie-western-pos.firebaseapp.com",
+  databaseURL:       "https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "nie-western-pos",
+  storageBucket:     "nie-western-pos.firebasestorage.app",
+  messagingSenderId: "268409247520",
+  appId:             "1:268409247520:web:e8a911d37ec031c50ba945"
+};
+var db;
+if(typeof firebase==='undefined'){
+  diag('ERROR: Firebase SDK did not load (network blocked CDN). Clear cached files and reload.','#7F1D1D');
+} else {
+  try { firebase.initializeApp(FB); db=firebase.database(); diag('Step 2: Firebase OK. Connecting...'); }
+  catch(e){ diag('ERROR at Step 2: '+e.message,'#7F1D1D'); }
+}
+
+var SERVE_MS=60000, MISSED_MS=600000, MAX_ACTIVE=4, MAX_MISSED=3;
+var RING_R=46, RING_C=parseFloat((2*Math.PI*RING_R).toFixed(2));
+
+var entries={}, announced={}, gotData=false;
+var seenAt={}, lastCalledAt={};
+function refTime(id,e){ return (seenAt[id]!=null)?seenAt[id]:((e&&e.calledAt)||Date.now()); }
+
+var QD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var QM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function updateClock(){
+  var n=new Date(), h=String(n.getHours()).padStart(2,'0'), m=String(n.getMinutes()).padStart(2,'0');
+  var c=document.getElementById('clock'), d=document.getElementById('clock-date');
+  if(c) c.textContent=h+':'+m;
+  if(d) d.textContent=QD[n.getDay()]+'  '+n.getDate()+' '+QM[n.getMonth()]+' '+n.getFullYear();
+}
+setInterval(updateClock,1000); updateClock();
+
+function reqWL(){ if('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){}); }
+reqWL();
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') reqWL(); });
+
+if(db){
+  db.ref('.info/connected').on('value',function(snap){
+    var dot=document.getElementById('conn-dot'), ok=snap.val();
+    if(dot){ dot.style.background=ok?'#16A34A':'#DC2626'; dot.style.boxShadow=ok?'0 0 5px #16A34A':'0 0 5px #DC2626'; }
+    if(!gotData) diag(ok?'Step 3: CONNECTED - now tap Call Customer on the kitchen tablet':'Step 3: DISCONNECTED - check WiFi', ok?'#0A200A':'#7F1D1D');
+  });
+}
+
+var audioUnlocked=false, audioCtx=null;
+function unlockAudio(){
+  if(audioUnlocked) return;
+  try{
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') audioCtx.resume();
+    var buf=audioCtx.createBuffer(1,1,22050), src=audioCtx.createBufferSource();
+    src.buffer=buf; src.connect(audioCtx.destination); src.start(0);
+    audioUnlocked=true;
+    diag('Step 5: Audio UNLOCKED.','#0A200A');
+    setTimeout(function(){ var b=document.getElementById('diag-bar'); if(b) b.style.display='none'; },3000);
+  }catch(e){ diag('Audio unlock failed: '+e.message,'#7F1D1D'); }
+}
+
+(function(){
+  var overlay=document.createElement('div');
+  overlay.id='audio-unlock';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(10,9,8,0.96);z-index:9999998;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:30px';
+  overlay.innerHTML='<div style="font-size:140px;animation:pulseUnlock 1.5s ease-in-out infinite">\uD83D\uDD0A</div>'
+    +'<div style="font-family:Playfair Display,serif;font-size:56px;font-weight:700;color:#E8C547;text-align:center;padding:0 40px">Tap anywhere to enable sound</div>'
+    +'<div style="font-size:22px;color:#8A7A6E;text-align:center;max-width:600px;line-height:1.5;padding:0 40px">Make sure the tablet volume is turned up</div>'
+    +'<style>@keyframes pulseUnlock{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:0.7}}</style>';
+  document.body.appendChild(overlay);
+  function unlock(){
+    unlockAudio(); playChime();
+    setTimeout(function(){ if(overlay&&overlay.parentNode) overlay.parentNode.removeChild(overlay); },800);
+  }
+  overlay.addEventListener('click',unlock);
+  overlay.addEventListener('touchstart',unlock);
+})();
+
+function playChime(){
+  if(!audioCtx) return;
+  try{
+    [880,1108,1318].forEach(function(freq,i){
+      var osc=audioCtx.createOscillator(), gain=audioCtx.createGain();
+      osc.type='sine'; osc.frequency.value=freq;
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      var t0=audioCtx.currentTime+i*0.15;
+      gain.gain.setValueAtTime(0,t0);
+      gain.gain.linearRampToValueAtTime(0.5,t0+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001,t0+0.6);
+      osc.start(t0); osc.stop(t0+0.7);
+    });
+  }catch(e){ console.log('Chime failed:',e); }
+}
+
+function speakNumber(queueNo,times){
+  if(!queueNo && queueNo!==0) return;
+  times=times||2;
+  var num=parseInt(queueNo);
+  var text='Number '+num+', please come to the counter';
+  playChime();
+  var count=0;
+  function fallbackSpeech(onDone){
+    if(!window.speechSynthesis){ onDone(); return; }
+    window.speechSynthesis.cancel();
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang='en-SG'; u.rate=0.85; u.pitch=0.9; u.volume=1;
+    u.onend=onDone; u.onerror=onDone;
+    window.speechSynthesis.speak(u);
+  }
+  function playOnce(){
+    if(count>=times) return;
+    count++;
+    var nextCall=function(){ if(count<times) setTimeout(playOnce,1000); };
+    var url='https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q='+encodeURIComponent(text);
+    var audio=new Audio(url);
+    audio.volume=1.0;
+    audio.addEventListener('ended',nextCall);
+    audio.addEventListener('error',function(){ fallbackSpeech(nextCall); });
+    var p=audio.play();
+    if(p&&p.catch) p.catch(function(){ fallbackSpeech(nextCall); });
+  }
+  setTimeout(playOnce,800);
+}
+setInterval(function(){ if(window.speechSynthesis&&!window.speechSynthesis.speaking) window.speechSynthesis.resume(); },5000);
+
+function fmtQ(n){ return String(n).padStart(3,'0'); }
+function getActive(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='serving';}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_ACTIVE); }
+function getMissed(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='missed';}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_MISSED); }
+
+function idleScreenHtml(){
+  return '<div class="empty-state"><div class="empty-icon">&#x1F37D;&#xFE0F;</div><div class="empty-txt">'+(gotData?'Waiting for orders':'Connecting...')+'</div></div>';
+}
+
+function renderDisplay(){
+  var now=Date.now(), active=getActive(), missed=getMissed();
+  var sl=Object.values(entries).map(function(e){return e.status;}).join(',')||'none';
+  diag('Step 4: data='+Object.keys(entries).length+'['+sl+'] serving='+active.length+' missed='+missed.length);
+
+  var grid=document.getElementById('serving-grid');
+  if(!grid) return;
+  grid.className='serving-grid'+(active.length>0&&active.length<4?' has-'+active.length:'');
+  if(!active.length){
+    grid.className='serving-grid';
+    grid.innerHTML=idleScreenHtml();
+  } else {
+    var html='';
+    for(var i=0;i<active.length;i++){
+      var id=active[i][0], e=active[i][1];
+      var elapsed=Math.max(0,Math.floor((now-refTime(id,e))/1000));
+      var remain=Math.max(0,60-elapsed);
+      var offset=Math.min(RING_C,(elapsed/60)*RING_C).toFixed(2);
+      var urgent=remain<=15, sc=urgent?'#DC2626':'#4ADE80';
+      html+='<div class="s-card active" data-id="'+id+'"><div class="card-radial"></div>'
+           +'<div class="q-hash">#</div><div class="q-num">'+fmtQ(e.queueNo)+'</div>'
+           +'<div class="ring-wrap"><svg viewBox="0 0 100 100" width="82" height="82">'
+           +'<circle cx="50" cy="50" r="'+RING_R+'" fill="none" stroke="#1C1408" stroke-width="7"/>'
+           +'<circle class="ring-arc" cx="50" cy="50" r="'+RING_R+'" fill="none" stroke="'+sc+'" stroke-width="7"'
+           +' stroke-dasharray="'+RING_C+'" stroke-dashoffset="'+offset+'" stroke-linecap="round" transform="rotate(-90 50 50)"/>'
+           +'</svg><div class="ring-secs'+(urgent?' urgent':'')+'">'+(gotData?remain:'?')+'</div></div></div>';
+    }
+    grid.innerHTML=html;
+  }
+
+  var chips=document.getElementById('missed-chips');
+  if(!chips) return;
+  if(!missed.length){
+    chips.innerHTML='<div class="no-missed">-- No missed numbers --</div>';
+  } else {
+    chips.innerHTML=missed.map(function(kv){
+      var id=kv[0], e=kv[1], age=Math.max(0,now-refTime(id,e));
+      var mins=Math.floor(age/60000), secs=Math.floor((age%60000)/1000);
+      return '<div class="m-chip" data-id="'+id+'">'
+           +'<div class="m-hash">#</div>'
+           +'<div class="m-num">'+fmtQ(e.queueNo)+'</div>'
+           +'<div class="m-time">Called '+(mins>0?mins+'m '+secs+'s':secs+'s')+' ago</div>'
+           +'</div>';
+    }).join('');
+  }
+}
+
+function tick(){
+  var now=Date.now(), changed=false;
+  Object.keys(entries).forEach(function(id){
+    var e=entries[id], age=now-refTime(id,e);
+    if(e.status==='serving'&&age>=SERVE_MS){ if(db) db.ref('queue_display').child(id).update({status:'missed'}); entries[id].status='missed'; changed=true; }
+    else if(e.status==='missed'&&age>=MISSED_MS){ if(db) db.ref('queue_display').child(id).remove(); delete entries[id]; delete seenAt[id]; delete lastCalledAt[id]; changed=true; }
+  });
+  if(changed){ renderDisplay(); return; }
+  document.querySelectorAll('.s-card.active').forEach(function(card){
+    var id=card.dataset.id, e=entries[id]; if(!e) return;
+    var elapsed=Math.max(0,Math.floor((Date.now()-refTime(id,e))/1000));
+    var remain=Math.max(0,60-elapsed), offset=Math.min(RING_C,(elapsed/60)*RING_C).toFixed(2), urgent=remain<=15;
+    var arc=card.querySelector('.ring-arc'); if(arc){ arc.setAttribute('stroke-dashoffset',offset); arc.setAttribute('stroke',urgent?'#DC2626':'#4ADE80'); }
+    var sec=card.querySelector('.ring-secs'); if(sec){ sec.textContent=remain; sec.className='ring-secs'+(urgent?' urgent':''); }
+  });
+  document.querySelectorAll('.m-chip').forEach(function(chip){
+    var id=chip.dataset.id, e=entries[id]; if(!e) return;
+    var age=Math.max(0,Date.now()-refTime(id,e)), mins=Math.floor(age/60000), secs=Math.floor((age%60000)/1000);
+    var t=chip.querySelector('.m-time');
+    if(t) t.textContent='Called '+(mins>0?mins+'m '+secs+'s':secs+'s')+' ago';
+  });
+}
+setInterval(tick,1000);
+
+if(db){
+  db.ref('queue_display').on('value', function(snap){
+    gotData=true;
+    var data=snap.val()||{};
+    Object.keys(data).forEach(function(id){
+      var e=data[id];
+      if(seenAt[id]==null || lastCalledAt[id]!==e.calledAt){
+        seenAt[id]=Date.now();
+        lastCalledAt[id]=e.calledAt;
+      }
+      var key=id+'_'+e.calledAt;
+      if(e.status==='serving'&&!announced[key]){ announced[key]=true; speakNumber(e.queueNo,2); }
+    });
+    Object.keys(seenAt).forEach(function(id){ if(!data[id]){ delete seenAt[id]; delete lastCalledAt[id]; } });
+    entries=data;
+    renderDisplay();
+  }, function(err){
+    diag('READ ERROR: '+err.code+' -- Firebase Console > Rules > add "queue_display":{".read":true,".write":true}','#7F1D1D');
+  });
+}
+</script>
+</body>
+</html>
