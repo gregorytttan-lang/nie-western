@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v80</title>
+<title>NIE Western Food v81</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -1492,30 +1492,40 @@ function updOrder(id, status){
   const o = orders.find(x=>x.id===id);
   if(o){
     o.status=status;
-    if(status==="collected") o.collectedAt=Date.now();
+    if(status==="collected"){
+      o.collectedAt=Date.now();
+      try{ db.ref("queue_display").child(id).update({status:"collected"}); }catch(e){}
+    }
     updOrderFB(id, status);
     renderKitchen();
     updateKitchenBadge();
   }
 }
 
-function callOrder(queueNo){
-  const label = "#" + String(queueNo).padStart(3,"0");
-  try{
-    const p = db.ref("queue/call").set({ queueNo: queueNo, at: Date.now() });
-    if(p && p.then){
-      p.then(()=>toast("\ud83d\udd0a Called " + label, "#2563EB"))
-       .catch(err=>{
-         console.error("Call failed:", err);
-         alert("Could not send the call.\n\nError: " + (err && err.message ? err.message : err)
-               + "\n\nThis usually means the Firebase database rules are blocking writes to \"queue\".");
-       });
-    } else {
-      toast("\ud83d\udd0a Called " + label, "#2563EB");
-    }
-  }catch(e){
-    alert("Could not send the call.\n\nError: " + e.message);
-  }
+// ── QUEUE DISPLAY TRIGGERS (same mechanism as W06) ──────────────────────────
+// Chef taps "Call Customer": marks the order ready and fires the display
+function markReady(id, queueNo){
+  updOrder(id, "ready");
+  db.ref("queue_display").child(id).set({
+    queueNo:  queueNo,
+    calledAt: Date.now(),
+    status:   "serving"
+  }).catch(err=>{
+    alert("Could not reach the display.\n\nError: " + (err && err.code ? err.code : err)
+      + "\n\nFirebase Console > Rules > add:\n\"queue_display\": { \".read\": true, \".write\": true }");
+  });
+  toast("\ud83d\udce3 Calling #" + String(queueNo).padStart(3,"0"), "#16A34A");
+}
+
+// Re-call a customer who has not turned up — display announces again
+function recallOrder(id, queueNo){
+  db.ref("queue_display").child(id).update({
+    calledAt: Date.now(),
+    status:   "serving"
+  }).catch(err=>{
+    alert("Could not reach the display.\n\nError: " + (err && err.code ? err.code : err));
+  });
+  toast("\ud83d\udd01 Re-calling #" + String(queueNo).padStart(3,"0"), "#C4572A");
 }
 
 function confirmCancelOrder(orderId){
@@ -1606,8 +1616,8 @@ function renderKitchen(){
         }).join("")}
       </div>
       <div style="padding:0 14px 12px;display:flex;gap:8px;flex-wrap:wrap">
-        ${order.status!=="ready"&&order.status!=="collected"?`<button onclick="updOrder('${order.id}','ready')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#16A34A;color:#fff;border-radius:9px">✓ Done</button>`:""}
-        ${order.status==="ready"?`<button onclick="callOrder(${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#2563EB;color:#fff;border-radius:9px">🔊 Call</button>`:""}
+        ${order.status!=="ready"&&order.status!=="collected"?`<button onclick="markReady('${order.id}',${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#16A34A;color:#fff;border-radius:9px">🔔 Call Customer</button>`:""}
+        ${order.status==="ready"?`<button onclick="recallOrder('${order.id}',${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#2563EB;color:#fff;border-radius:9px">🔁 Re-call</button>`:""}
         ${order.status==="ready"?`<button onclick="updOrder('${order.id}','collected')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#78716C;color:#fff;border-radius:9px">✓ Collected</button>`:""}
         <button onclick="printTicket(orders.find(x=>x.id==='${order.id}'))" style="padding:11px 20px;font-size:22px;background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:9px">🖨️</button>
         ${order.status!=="cancelled"?`<button onclick="confirmCancelOrder('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:9px">✕ Cancel</button>`:""}
@@ -3166,38 +3176,11 @@ function renderDisplay(paintOnly){
       + fmtQ(o.queueNo) + '</span></div>').join("");
   }
 
-  // announce numbers that just became ready
-  if(paintOnly) return;              // startup paint: don't touch announce state
-  const nowIds = ready.map(o=>o.id);
-  if(displayFirstPass){
-    nowIds.forEach(id=>displayKnownReady.add(id));
-    displayFirstPass = false;
-  } else {
-    const fresh = ready.filter(o=>!displayKnownReady.has(o.id));
-    fresh.forEach(o=>displayKnownReady.add(o.id));
-    if(fresh.length) announceReady(fresh.map(o=>o.queueNo));
-  }
-  Array.from(displayKnownReady).forEach(id=>{
-    if(nowIds.indexOf(id) === -1) displayKnownReady.delete(id);
-  });
 }
 
-let displayHighlight = null, displayLastCallAt = 0, displayCallInit = false, displayCallCount = 0;
-
-let dispVoiceNote = "";
-function setDispVoiceStatus(ok, why){
-  dispVoiceNote = ok ? "voice OK" : ("voice failed: " + (why || "no start"));
-  const el = document.getElementById("disp-voice");
-  if(el){
-    el.textContent = dispVoiceNote;
-    el.style.color = ok ? "#16A34A" : "#DC2626";
-  }
-}
-
-function testDisplayVoice(){
-  if(!displaySoundOn){ alert("Tap the screen first to turn on sound."); return; }
-  announceReady([888]);
-}
+// ── DISPLAY STATE + DIAGNOSTICS ─────────────────────────────────────────────
+let displayHighlight = null, displayCallInit = false, displayCallCount = 0;
+const announcedCalls = {};
 
 const diag = { firebase:"…", conn:"…", channel:"…", calls:0, sound:"off", lastErr:"" };
 function renderDiag(){
@@ -3220,9 +3203,26 @@ function setDispStatus(txt, colour){
   if(el){ el.textContent = txt; el.style.color = colour || "rgba(255,255,255,0.45)"; }
 }
 
+function setDispVoiceStatus(ok, why){
+  const el = document.getElementById("disp-voice");
+  if(el){
+    el.textContent = ok ? "voice OK" : ("voice failed: " + (why || "no start"));
+    el.style.color = ok ? "#16A34A" : "#DC2626";
+  }
+}
+
+function testDisplayVoice(){
+  if(!displaySoundOn){ alert("Tap the screen first to turn on sound."); return; }
+  announceReady([888]);
+}
+
+// ── CALL CHANNEL (same mechanism as the W06 display) ────────────────────────
+// Per-order entries under queue_display. The announcement key is id + calledAt,
+// so a re-call announces again. Nothing compares timestamps across devices,
+// so differing tablet clocks cannot break it.
 function listenForCalls(){
   if(!isDisplayMode) return;
-  // connection indicator
+
   try{
     db.ref(".info/connected").on("value", s=>{
       diag.conn = s.val() ? "online" : "offline";
@@ -3231,33 +3231,36 @@ function listenForCalls(){
                     s.val() ? "#16A34A" : "#DC2626");
     });
   }catch(e){}
-  db.ref("queue/call").on("value", snap=>{
-    const v = snap.val();
-    // First snapshot = whatever was already stored. Ignore it, then react to
-    // every change after. Deliberately clock-free: kitchen and display tablets
-    // do not share a clock.
+
+  db.ref("queue_display").on("value", snap=>{
+    const data = snap.val() || {};
     if(!displayCallInit){
       displayCallInit = true;
-      displayLastCallAt = (v && v.at) ? v.at : 0;
+      Object.keys(data).forEach(id=>{
+        if(data[id]) announcedCalls[id + "_" + data[id].calledAt] = true;  // ignore pre-existing
+      });
       diag.channel = "ready"; renderDiag();
       setDispStatus("\u25cf online \u2014 call channel ready", "#16A34A");
       return;
     }
-    if(!v || !v.at || !v.queueNo) return;
-    if(v.at === displayLastCallAt) return;   // no change
-    displayLastCallAt = v.at;
-    displayHighlight = v.queueNo;
-    renderDisplay(true);
-    announceReady([v.queueNo]);
-    displayCallCount++;
-    diag.calls = displayCallCount; renderDiag();
-    setDispStatus("\u25cf calls received: " + displayCallCount
-      + "  (last #" + String(v.queueNo).padStart(3,"0") + ")", "#2563EB");
-    setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
+    Object.keys(data).forEach(id=>{
+      const e = data[id];
+      if(!e || e.status !== "serving") return;
+      const key = id + "_" + e.calledAt;
+      if(announcedCalls[key]) return;
+      announcedCalls[key] = true;
+      displayCallCount++;
+      diag.calls = displayCallCount; renderDiag();
+      setDispStatus("\u25cf calls received: " + displayCallCount
+        + "  (last #" + String(e.queueNo).padStart(3,"0") + ")", "#2563EB");
+      displayHighlight = e.queueNo;
+      renderDisplay(true);
+      announceReady([e.queueNo]);
+      setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
+    });
   }, err=>{
-    // e.g. PERMISSION_DENIED if the database rules block "queue"
     diag.channel = "BLOCKED";
-    diag.lastErr = (err && err.code ? err.code : "error") + " on queue/call";
+    diag.lastErr = (err && err.code ? err.code : "error") + " on queue_display";
     renderDiag();
     setDispStatus("\u25cf call channel blocked: " + (err && err.code ? err.code : "error"), "#DC2626");
   });
