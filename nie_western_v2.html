@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v66</title>
+<title>NIE Western Food v67</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -796,7 +796,7 @@ function renderMenu(){
   if(!cat){ document.getElementById("items-list").innerHTML="<p style='padding:40px;text-align:center;color:#78716C'>No items available</p>"; return; }
   document.getElementById("items-list").innerHTML = `
     <div style="padding:16px 20px 8px;border-bottom:1px solid #E5E0D8">
-      <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#1C1917">${cat.name}</div>
+      <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#1C1917">${Tcat(cat.name)}</div>
     </div>
     ${cat.items.map(item=>{
       const inCart = cart.filter(x=>x.id===item.id);
@@ -1294,7 +1294,7 @@ async function confirmPayment(paymentMethod='paynow'){
       const e = Object.values(i.choices||{}).reduce((s,c)=>s+choicePrice(c),0);
       return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.1)">
         <div style="flex:1">
-          <div style="font-size:15px;font-weight:700;color:#fff">${i.name} ×${i.qty}</div>
+          <div style="font-size:15px;font-weight:700;color:#fff">${T(i.name)} ×${i.qty}</div>
           ${ad.length?`<div style="font-size:11px;color:#78716C;margin-top:2px">${ad.join(" · ")}</div>`:""}
         </div>
         <div style="font-size:13px;font-weight:600;color:#C4572A;margin-left:12px">${fmtS((i.price+e)*i.qty)}</div>
@@ -2950,10 +2950,30 @@ function applyStaticCN(){
   if(typeof SAUCE !== "undefined")        SAUCE.label = "🍝 选择您的意面酱";
   document.documentElement.lang = "zh-CN";
 }
-if(document.readyState === "loading"){
-  document.addEventListener("DOMContentLoaded", applyStaticCN);
-} else {
+// Re-apply after any DOM update so async re-renders can't revert it.
+// applyStaticCN is idempotent: once translated the English keys no longer match.
+let _cnBusy = false, _cnQueued = false;
+function scheduleCN(){
+  if(LANG !== "cn" || _cnBusy || _cnQueued) return;
+  _cnQueued = true;
+  requestAnimationFrame(()=>{
+    _cnQueued = false; _cnBusy = true;
+    try { applyStaticCN(); } catch(e){}
+    _cnBusy = false;
+  });
+}
+function startCN(){
+  if(LANG !== "cn") return;
   applyStaticCN();
+  try {
+    new MutationObserver(()=>{ if(!_cnBusy) scheduleCN(); })
+      .observe(document.body, {childList:true, subtree:true, characterData:true});
+  } catch(e){}
+}
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", startCN);
+} else {
+  startCN();
 }
 </script>
 <!-- Password Modal -->
