@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v65</title>
+<title>NIE Western Food v66</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -426,60 +426,71 @@ const CN = {
     "Take-Away Packaging":"外带包装",
     "Take-Away (Bring Your Own Box)":"外带（自带饭盒）",
   },
-  // UI labels
+  // UI labels — keys must match the exact on-screen English text
   ui: {
-    "NIE Western Food":"NIE 西餐",
+    "🧾 Order":"🧾 点餐",
+    "We Are Closed":"暂停营业",
     "NIE Canteen":"NIE 食堂",
-    "Scan QR to Order":"扫码点餐",
-    "We Are Closed":"我们已关闭",
-    "Thank you for visiting! See you soon":"感谢光临！下次再见",
-    "Opening hours":"营业时间",
-    "Your Cart":"您的购物车",
-    "Dine In":"堂食",
-    "Take Away":"外带",
-    "Pay Now":"去付款",
-    "Cart is empty":"购物车是空的",
+    "🕐 Next Opening":"🕐 下次营业",
+    "Thank you for visiting! See you soon 🙏":"感谢光临！下次再见 🙏",
+    "Self-order · NETS/PayNow · Self-collection":"自助点餐 · NETS/PayNow · 自助取餐",
+    "Special order? Call":"特别订单？请致电",
+    "Tap to view your order status":"点击查看您的订单状态",
+    "No Thanks — Skip Sides":"不用了 — 跳过配菜",
+    "Add to Order ✓":"加入订单 ✓",
+    "📋 Your Active Orders":"📋 您的订单",
+    "Tap an order to see its status":"点击订单查看状态",
     "Close":"关闭",
-    "Remove":"删除",
+    "Your Order":"您的订单",
+    "← Add More":"← 继续点餐",
+    "Clear":"清空",
+    "Special Remarks (Optional)":"备注（可选）",
+    "Dining Option":"用餐方式",
+    "* Please select one to continue":"* 请选择一项以继续",
+    "🍽️ Dine In":"🍽️ 堂食",
+    "🥡 Take Away":"🥡 外带",
     "Total":"合计",
-    "Order Confirmed":"订单已确认",
+    "Pay Now →":"去付款 →",
+    "Complete payment to place your order":"完成付款以提交订单",
+    "Order Summary":"订单摘要",
+    "⚠️ Special Remarks":"⚠️ 备注",
+    "Amount to Pay":"应付金额",
+    "Amount is pre-filled — just confirm & pay":"金额已自动填写 — 确认后付款即可",
+    "📸 Save QR to Phone":"📸 保存二维码到手机",
+    "Save QR to Phone":"保存二维码到手机",
+    "Tap":"点击",
+    "above to save the QR":"保存二维码",
+    "Open bank app → PayNow → Scan from gallery → Confirm payment":"打开银行应用 → PayNow → 从相册扫码 → 确认付款",
+    "I Have Paid":"我已付款",
+    "below to get your queue number":"以获取排队号",
+    "Screenshot your bank payment confirmation — show it when collecting your food":"请截图付款确认 — 取餐时出示",
+    "✅ I Have Paid — Get Queue Number":"✅ 我已付款 — 获取排队号",
+    "💵 Pay by Cash at Counter":"💵 到柜台付现金",
+    "← Back to Menu":"← 返回菜单",
+    "✅ Order Confirmed":"✅ 订单已确认",
     "Queue No.":"排队号",
-    "Keep this page open to track your order":"请保持此页面打开以跟踪您的订单",
+    "🔔 Tap here to enable sound alert":"🔔 点击此处启用声音提醒",
+    "So we can beep your phone when food is ready!":"食物准备好时我们会提醒您！",
+    "📱 Keep this page open to track your order":"📱 请保持此页面打开以跟踪您的订单",
+    "💵 Please pay cash at the counter and show this screen":"💵 请到柜台付现金并出示此画面",
+    "📸 Screenshot your bank payment confirmation as proof of payment":"📸 请截图您的付款确认作为付款证明",
+    "Close & New Order":"关闭并下新订单",
+    // Dynamic (rendered by JS)
     "Order Received":"已收到订单",
     "Ready for Pickup!":"可以取餐了！",
     "Collected":"已取餐",
-    "Close & New Order":"关闭并下新订单",
-    "Screenshot your bank payment confirmation as proof of payment":"请截图您的付款确认作为付款证明",
-    "Tap here to enable sound alert":"点击此处启用声音提醒",
-    "So we can beep your phone when food is ready!":"食物准备好时我们会提醒您！",
-    "Sound Alert Enabled":"声音提醒已开启",
-    "We will beep your phone when food is ready!":"食物准备好时会提醒您！",
+    "options":"可选",
+    "each":"每份",
     "Order Cancelled":"订单已取消",
-    "If you did not request this cancellation, please approach our staff at the counter for assistance.":"如果您没有要求取消，请到柜台找我们的工作人员协助。",
-    "Want to add a side?":"要加配菜吗？",
-    "Choose your Spaghetti Sauce":"选择您的意面酱",
+    "If you did not request this cancellation, please approach our staff at the counter for assistance.":"如果您没有要求取消订单，请到柜台找我们的工作人员协助。",
     "Chicken Bolognese":"鸡肉肉酱",
     "Mushroom Cream":"蘑菇奶油",
-    "No Thanks":"不用了",
-    "Add to Order":"加入订单",
-    "Special order? Call":"特别订单？请致电",
-    "You have an active order":"您有一个活跃的订单",
-    "Tap to view your order status":"点击查看您的订单状态",
-    "Your Active Orders":"您的活跃订单",
-    "Please pay cash at the counter and show this screen":"请到柜台付现金并出示此画面",
-    "I Have Paid":"我已付款",
-    "Remarks":"备注",
-    "Add remarks here...":"在此添加备注...",
-    "+ Spaghetti — Chicken Bolognese":"+ 意面 — 鸡肉肉酱",
-    "+ Spaghetti — Mushroom Cream":"+ 意面 — 蘑菇奶油",
+    "+ Spaghetti — Chicken Bolognese":"+ 意大利面 — 鸡肉肉酱",
+    "+ Spaghetti — Mushroom Cream":"+ 意大利面 — 蘑菇奶油",
     "+ Butter Rice":"+ 黄油饭",
     "+ Crispy Fries":"+ 脆薯条",
     "+ Cheese Sauce":"+ 芝士酱",
     "+ Sunny Side Up Egg":"+ 太阳蛋",
-    "items in cart":"件商品在购物车中",
-    "Mon – Fri":"周一至周五",
-    "SOLD OUT":"已售罄",
-    "Add to cart first":"请先加入购物车",
   }
 };
 
@@ -778,7 +789,7 @@ function renderMenu(){
   // Tabs
   const tabs = document.getElementById("cat-tabs");
   tabs.innerHTML = avail.map((c,i)=>`
-    <button onclick="switchCat(${i})" id="tab-${i}" style="background:transparent;color:${i===curCat?"#C4572A":"#78716C"};border:none;border-bottom:${i===curCat?"2px solid #C4572A":"2px solid transparent"};padding:10px 14px;font-size:14px;font-weight:${i===curCat?600:400};white-space:nowrap;flex-shrink:0;transition:all 0.15s">${c.name}</button>
+    <button onclick="switchCat(${i})" id="tab-${i}" style="background:transparent;color:${i===curCat?"#C4572A":"#78716C"};border:none;border-bottom:${i===curCat?"2px solid #C4572A":"2px solid transparent"};padding:10px 14px;font-size:14px;font-weight:${i===curCat?600:400};white-space:nowrap;flex-shrink:0;transition:all 0.15s">${Tcat(c.name)}</button>
   `).join("");
   // Items
   const cat = avail[curCat] || avail[0];
@@ -795,10 +806,10 @@ function renderMenu(){
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #E5E0D8;background:${qty>0?"#FDF0EA":"#fff"};transition:background 0.2s">
         <div style="flex:1;padding-right:16px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <span style="font-size:16px;font-weight:600;color:#1C1917;line-height:1.3">${item.name}</span>
-            ${hasOpt?`<span style="font-size:10px;background:rgba(124,58,237,0.1);color:#7C3AED;border-radius:20px;padding:2px 8px;font-weight:600">options</span>`:""}
+            <span style="font-size:16px;font-weight:600;color:#1C1917;line-height:1.3">${T(item.name)}</span>
+            ${hasOpt?`<span style="font-size:10px;background:rgba(124,58,237,0.1);color:#7C3AED;border-radius:20px;padding:2px 8px;font-weight:600">${T("options")}</span>`:""}
           </div>
-          ${item.desc?`<div style="font-size:13px;color:#78716C;line-height:1.5;margin-bottom:6px">${item.desc}</div>`:""}
+          ${LANG==="cn" ? `<div style="font-size:12px;color:#A8A29E;margin-bottom:6px">${item.name}</div>` : (item.desc?`<div style="font-size:13px;color:#78716C;line-height:1.5;margin-bottom:6px">${item.desc}</div>`:"")}
           <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#C4572A">${fmtS(item.price)}</div>
         </div>
         <div style="flex-shrink:0">
@@ -974,18 +985,18 @@ function updateCartFab(){
 
 // ── MODIFIER MODAL ───────────────────────────────────────────────────────────
 function openModModal(item){
-  document.getElementById("mod-title").textContent = item.name;
+  document.getElementById("mod-title").textContent = T(item.name);
   document.getElementById("mod-price").textContent = fmtS(item.price);
   const hasSauce = item.modifiers.some(m=>m.id==="sauce");
   const onlySide = item.modifiers.length===1 && item.modifiers[0].id==="side";
   
   if(hasSauce){
     // Sauce required — show item name as title
-    document.getElementById("mod-title").textContent = item.name;
+    document.getElementById("mod-title").textContent = T(item.name);
     document.getElementById("mod-price").textContent = fmtS(item.price);
   } else if(onlySide){
-    document.getElementById("mod-title").textContent = "🍽️ Want to add a side?";
-    document.getElementById("mod-price").textContent = item.name+" — "+fmtS(item.price);
+    document.getElementById("mod-title").textContent = LANG==="cn" ? "🍽️ 要加配菜吗？" : "🍽️ Want to add a side?";
+    document.getElementById("mod-price").textContent = T(item.name)+" — "+fmtS(item.price);
   }
   
   // Show "No Thanks" only when no required modifier
@@ -1021,7 +1032,7 @@ function renderModOptions(){
           return `<button onclick="pickModMulti('${mod.id}','${name}',${price})" style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:10px;padding:14px 18px;background:${sel?"#FDF0EA":"#F5F3F0"};color:${sel?"#9A3E1C":"#1C1917"};border:2px solid ${sel?"#C4572A":"#E5E0D8"};border-radius:12px;font-size:15px;font-weight:${sel?600:400};transition:all 0.15s;text-align:left">
             <span style="display:flex;align-items:center;gap:10px">
               <span style="width:18px;height:18px;border-radius:4px;border:2px solid ${sel?"#C4572A":"#D4CFC8"};background:${sel?"#C4572A":"transparent"};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${sel?`<span style="color:#fff;font-size:12px;font-weight:700">✓</span>`:""}</span>
-              ${name}
+              ${T(name)}
             </span>
             ${price>0?`<span style="color:#C4572A;font-size:14px;font-weight:600">+${fmtS(price)}</span>`:""}
           </button>`;
@@ -1038,7 +1049,7 @@ function renderModOptions(){
           return `<button onclick="pickMod('${mod.id}','${name}',${price})" style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:10px;padding:14px 18px;background:${sel?"#FDF0EA":"#F5F3F0"};color:${sel?"#9A3E1C":"#1C1917"};border:2px solid ${sel?"#C4572A":"#E5E0D8"};border-radius:12px;font-size:15px;font-weight:${sel?600:400};transition:all 0.15s;text-align:left">
             <span style="display:flex;align-items:center;gap:10px">
               <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${sel?"#C4572A":"#D4CFC8"};background:${sel?"#C4572A":"transparent"};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${sel?`<span style="width:8px;height:8px;border-radius:50%;background:#fff;display:block"></span>`:""}</span>
-              ${name}
+              ${T(name)}
             </span>
             ${price>0?`<span style="color:#C4572A;font-size:14px;font-weight:600">+${fmtS(price)}</span>`:""}
           </button>`;
@@ -1136,9 +1147,9 @@ function renderCartModal(){
     const ad = addons(item);
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #E5E0D8">
       <div style="flex:1">
-        <div style="font-weight:600;font-size:14px;color:#1C1917">${item.name}</div>
-        ${ad.length?`<div style="font-size:11px;color:#7C3AED;margin-top:2px">${ad.map(c=>c.name+(c.price>0?" (+"+fmtS(c.price)+")":"")).join(" · ")}</div>`:""}
-        <div style="font-size:12px;color:#78716C">${fmtS(unit)} each</div>
+        <div style="font-weight:600;font-size:14px;color:#1C1917">${T(item.name)}</div>
+        ${ad.length?`<div style="font-size:11px;color:#7C3AED;margin-top:2px">${ad.map(c=>T(c.name)+(c.price>0?" (+"+fmtS(c.price)+")":"")).join(" · ")}</div>`:""}
+        <div style="font-size:12px;color:#78716C">${fmtS(unit)} ${T("each")}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <button onclick="removeFromCart('${item.cartKey}');renderCartModal();updateCartFab()" style="width:30px;height:30px;border-radius:50%;background:#F5F3F0;border:1px solid #E5E0D8;color:#1C1917;font-size:16px;display:flex;align-items:center;justify-content:center">−</button>
@@ -1170,10 +1181,10 @@ function proceedToPayment(){
     const ad = addons(item);
     return `<div style="padding:8px 0;border-bottom:${i<pendingOrder.items.length-1?"1px solid #E5E0D8":"none"}">
       <div style="display:flex;justify-content:space-between;font-size:14px">
-        <span style="color:#1C1917">${item.qty}× ${item.name}</span>
+        <span style="color:#1C1917">${item.qty}× ${T(item.name)}</span>
         <span style="color:#C4572A;font-weight:600">${fmtS(unit*item.qty)}</span>
       </div>
-      ${ad.length?`<div style="font-size:12px;color:#78716C;margin-top:2px;padding-left:12px">${ad.map(c=>c.name+(c.price>0?" (+"+fmtS(c.price)+")":"")).join(" · ")}</div>`:""}
+      ${ad.length?`<div style="font-size:12px;color:#78716C;margin-top:2px;padding-left:12px">${ad.map(c=>T(c.name)+(c.price>0?" (+"+fmtS(c.price)+")":"")).join(" · ")}</div>`:""}
     </div>`;
   }).join("") + (pendingOrder.dining==="takeaway" && pendingOrder.takeawayCharge>0 ? `
     <div style="padding:8px 0;border-bottom:1px solid #E5E0D8">
@@ -1268,7 +1279,7 @@ async function confirmPayment(paymentMethod='paynow'){
     cart = []; pendingOrder = null;
     closePayment();
     document.getElementById("queue-number").textContent = fmtQ(queueNo);
-    document.getElementById("queue-dining").textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
+    document.getElementById("queue-dining").textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
     updateStatusUI("paid");
     startTrackingOrder(o.id);
     saveActiveOrder(o);
@@ -1394,7 +1405,7 @@ function reopenQueueForOrder(orderId){
     const trackBar = document.getElementById("order-tracking-bar");
     if(trackBar) trackBar.style.display="";
     document.getElementById("queue-number").textContent = String(o.queueNo).padStart(2,"0");
-    document.getElementById("queue-dining").textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
+    document.getElementById("queue-dining").textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
     updateStatusUI(o.status);
     startTrackingOrder(orderId);
     const m = document.getElementById("queue-modal");
@@ -1980,9 +1991,9 @@ function updateStatusUI(status){
   lastKnownStatus = status;
   // Update status steps - dark theme
   const steps = [
-    {id:"paid",      icon:"✅", label:"Order Received"},
-    {id:"ready",     icon:"🔔", label:"Ready for Pickup!"},
-    {id:"collected", icon:"🥡", label:"Collected"},
+    {id:"paid",      icon:"✅", label:T("Order Received")},
+    {id:"ready",     icon:"🔔", label:T("Ready for Pickup!")},
+    {id:"collected", icon:"🥡", label:T("Collected")},
   ];
   const statusOrder = ["paid","ready","collected"];
   const curIdx = statusOrder.indexOf(status);
@@ -2045,7 +2056,7 @@ function startTrackingOrder(orderId){
     const qEl = document.getElementById("queue-number");
     const dEl = document.getElementById("queue-dining");
     if(qEl && o.queueNo) qEl.textContent = fmtQ(o.queueNo);
-    if(dEl) dEl.textContent = o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In";
+    if(dEl) dEl.textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
     updateStatusUI(o.status);
   });
 }
@@ -2912,6 +2923,38 @@ renderMenu();
 updateKitchenBadge();
 // Init recovery banner
 updateRecoveryBanner();
+
+// ── APPLY CHINESE TO STATIC HTML (customer views only) ──────────────────────
+function applyStaticCN(){
+  if(LANG !== "cn") return;
+  const SKIP = ["view-kitchen","view-admin"];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      let el = n.parentElement;
+      while(el){
+        if(SKIP.indexOf(el.id) !== -1) return NodeFilter.FILTER_REJECT;
+        el = el.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const nodes = [];
+  while(walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(n=>{
+    const t = n.nodeValue.trim();
+    if(t && CN.ui[t]) n.nodeValue = n.nodeValue.replace(t, CN.ui[t]);
+  });
+  // Modifier popup headings
+  if(typeof SIDE !== "undefined")         SIDE.label = "🍽️ 要加配菜吗？";
+  if(typeof SIDE_NO_SPAG !== "undefined") SIDE_NO_SPAG.label = "🍽️ 要加配菜吗？";
+  if(typeof SAUCE !== "undefined")        SAUCE.label = "🍝 选择您的意面酱";
+  document.documentElement.lang = "zh-CN";
+}
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", applyStaticCN);
+} else {
+  applyStaticCN();
+}
 </script>
 <!-- Password Modal -->
 <div id="pwd-modal" class="hidden" style="position:fixed;inset:0;z-index:999;background:rgba(28,25,23,0.7);display:flex;align-items:center;justify-content:center;padding:24px">
