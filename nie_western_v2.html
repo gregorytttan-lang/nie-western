@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v79</title>
+<title>NIE Western Food v80</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -56,6 +56,8 @@ input{font-family:'DM Sans',sans-serif;outline:none}
   </div>
 
   <div id="disp-grid" style="flex:1;display:grid;gap:1.5vh 1.5vw;padding:1.2vh 3vw 3vh;align-content:start;overflow:hidden"></div>
+
+  <div id="disp-diag" style="position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,0.55);border-top:1px solid rgba(255,255,255,0.15);padding:0.6vh 2vw;font-size:1.4vh;font-family:monospace;color:rgba(255,255,255,0.75);display:flex;gap:2vw;flex-wrap:wrap;z-index:5"></div>
 
   <div id="disp-sound" onclick="enableDisplaySound()" style="position:absolute;inset:0;background:rgba(28,25,23,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10">
     <div style="font-size:9vh;margin-bottom:2vh">🔔</div>
@@ -3010,6 +3012,7 @@ function enableDisplaySound(){
     u.volume = 0; window.speechSynthesis.speak(u);
   }catch(e){}
   startAudioKeepAlive();
+  diag.sound = "on"; renderDiag();
   requestDisplayWakeLock();
 }
 
@@ -3196,6 +3199,22 @@ function testDisplayVoice(){
   announceReady([888]);
 }
 
+const diag = { firebase:"…", conn:"…", channel:"…", calls:0, sound:"off", lastErr:"" };
+function renderDiag(){
+  const el = document.getElementById("disp-diag");
+  if(!el) return;
+  const pill = (label, val, ok)=>
+    '<span style="color:' + (ok === true ? "#4ADE80" : ok === false ? "#F87171" : "rgba(255,255,255,0.6)") + '">'
+    + label + ": " + val + '</span>';
+  el.innerHTML =
+      pill("firebase", diag.firebase, diag.firebase === "loaded")
+    + pill("net", diag.conn, diag.conn === "online")
+    + pill("call channel", diag.channel, diag.channel === "ready")
+    + pill("calls", diag.calls, diag.calls > 0 ? true : null)
+    + pill("sound", diag.sound, diag.sound === "on")
+    + (diag.lastErr ? pill("error", diag.lastErr, false) : "");
+}
+
 function setDispStatus(txt, colour){
   const el = document.getElementById("disp-status");
   if(el){ el.textContent = txt; el.style.color = colour || "rgba(255,255,255,0.45)"; }
@@ -3206,6 +3225,8 @@ function listenForCalls(){
   // connection indicator
   try{
     db.ref(".info/connected").on("value", s=>{
+      diag.conn = s.val() ? "online" : "offline";
+      renderDiag();
       setDispStatus(s.val() ? "\u25cf online" : "\u25cf offline \u2014 check WiFi",
                     s.val() ? "#16A34A" : "#DC2626");
     });
@@ -3218,6 +3239,7 @@ function listenForCalls(){
     if(!displayCallInit){
       displayCallInit = true;
       displayLastCallAt = (v && v.at) ? v.at : 0;
+      diag.channel = "ready"; renderDiag();
       setDispStatus("\u25cf online \u2014 call channel ready", "#16A34A");
       return;
     }
@@ -3228,11 +3250,15 @@ function listenForCalls(){
     renderDisplay(true);
     announceReady([v.queueNo]);
     displayCallCount++;
+    diag.calls = displayCallCount; renderDiag();
     setDispStatus("\u25cf calls received: " + displayCallCount
       + "  (last #" + String(v.queueNo).padStart(3,"0") + ")", "#2563EB");
     setTimeout(()=>{ displayHighlight = null; renderDisplay(true); }, 12000);
   }, err=>{
     // e.g. PERMISSION_DENIED if the database rules block "queue"
+    diag.channel = "BLOCKED";
+    diag.lastErr = (err && err.code ? err.code : "error") + " on queue/call";
+    renderDiag();
     setDispStatus("\u25cf call channel blocked: " + (err && err.code ? err.code : "error"), "#DC2626");
   });
 }
@@ -3255,6 +3281,8 @@ if(isDisplayMode){
   tickDisplayClock();
   setInterval(tickDisplayClock, 1000);
   renderDisplay(true);
+  diag.firebase = (typeof firebase !== "undefined" && db) ? "loaded" : "FAILED";
+  renderDiag();
   listenForCalls();
 }
 
