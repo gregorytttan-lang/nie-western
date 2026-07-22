@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v75</title>
+<title>NIE Western Food v76</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -46,6 +46,8 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <div id="disp-clock" style="font-size:3.2vh;font-weight:800;line-height:1"></div>
       <div id="disp-count" style="font-size:1.6vh;color:rgba(255,255,255,0.5);margin-top:0.5vh"></div>
       <div id="disp-status" style="font-size:1.4vh;margin-top:0.5vh;color:rgba(255,255,255,0.45)">connecting…</div>
+      <div id="disp-voice" style="font-size:1.3vh;margin-top:0.2vh;color:rgba(255,255,255,0.35)"></div>
+      <button onclick="testDisplayVoice()" style="margin-top:0.8vh;background:transparent;border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.6);border-radius:1vh;padding:0.5vh 1.4vh;font-size:1.3vh;cursor:pointer">🔊 Test voice</button>
     </div>
   </div>
 
@@ -3050,16 +3052,22 @@ function startSpeechWatchdog(){
   speechWatchdog = setInterval(()=>{
     try{
       const s = window.speechSynthesis;
-      if(s && (s.speaking || s.pending)) s.resume();
+      if(!s) return;
+      if(s.speaking || s.pending){ s.resume(); return; }
+      // Idle: keep the engine warm so Android doesn't let it lapse
+      const warm = new SpeechSynthesisUtterance(" ");
+      warm.volume = 0; warm.rate = 2;
+      s.speak(warm);
     }catch(e){}
-  }, 4000);
+  }, 8000);
 }
 
 function speakOnDisplay(msg, attempt){
   const s = window.speechSynthesis;
-  if(!s){ displayBeep(); return; }
+  if(!s){ displayBeep(); setDispVoiceStatus(false, "no speech engine"); return; }
   attempt = attempt || 0;
-  try{ s.cancel(); }catch(e){}
+  // Only cancel if it is genuinely busy — cancelling while idle wedges Chrome/Android
+  try{ if(s.speaking || s.pending) s.cancel(); }catch(e){}
   setTimeout(()=>{
     try{
       const u = new SpeechSynthesisUtterance(msg);
@@ -3067,17 +3075,18 @@ function speakOnDisplay(msg, attempt){
       const v = s.getVoices().find(x=>x.lang && x.lang.startsWith("en"));
       if(v) u.voice = v;
       let started = false;
-      u.onstart = ()=>{ started = true; };
-      u.onerror = ()=>{ displayBeep(); };
+      u.onstart = ()=>{ started = true; setDispVoiceStatus(true); };
+      u.onerror = (ev)=>{ displayBeep(); setDispVoiceStatus(false, (ev && ev.error) || "error"); };
       s.speak(u);
       try{ s.resume(); }catch(e){}
       setTimeout(()=>{
         if(started) return;
-        if(attempt < 1){                 // engine stalled — hard reset and retry once
+        if(attempt < 2){                 // engine stalled — reset and retry
           try{ s.cancel(); }catch(e){}
           speakOnDisplay(msg, attempt + 1);
         } else {
           displayBeep();                 // give up on voice, at least beep
+          setDispVoiceStatus(false, "engine not responding");
         }
       }, 1700);
     }catch(e){ displayBeep(); }
@@ -3094,8 +3103,9 @@ function announceReady(numbers){
   const msg = "Order number " + numbers.join(", and ") + ", is ready for collection.";
   announceTimers.push(setTimeout(()=>speakOnDisplay(msg), 1200));
   announceTimers.push(setTimeout(()=>{
+    const isTest = numbers.length === 1 && numbers[0] === 888;
     const stillReady = orders.some(o=>o.status === "ready" && numbers.indexOf(o.queueNo) !== -1);
-    if(stillReady) speakOnDisplay(msg);
+    if(isTest || stillReady) speakOnDisplay(msg);
   }, 5400));
 }
 
@@ -3144,6 +3154,21 @@ function renderDisplay(paintOnly){
 }
 
 let displayHighlight = null, displayLastCallAt = 0;
+
+let dispVoiceNote = "";
+function setDispVoiceStatus(ok, why){
+  dispVoiceNote = ok ? "voice OK" : ("voice failed: " + (why || "no start"));
+  const el = document.getElementById("disp-voice");
+  if(el){
+    el.textContent = dispVoiceNote;
+    el.style.color = ok ? "#16A34A" : "#DC2626";
+  }
+}
+
+function testDisplayVoice(){
+  if(!displaySoundOn){ alert("Tap the screen first to turn on sound."); return; }
+  announceReady([888]);
+}
 
 function setDispStatus(txt, colour){
   const el = document.getElementById("disp-status");
