@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" translate="no" class="notranslate">
 <head>
 <meta charset="UTF-8">
+<meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v68</title>
+<title>NIE Western Food v69</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
@@ -21,7 +22,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,0.4)}70%{box-shadow:0 0 0 10px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
 </style>
 </head>
-<body>
+<body translate="no" class="notranslate">
 
 <!-- NAV -->
 <nav id="nav" style="background:#fff;border-bottom:1px solid #E5E0D8;display:flex;align-items:stretch;position:sticky;top:0;z-index:100;padding:0 8px">
@@ -2975,7 +2976,6 @@ function applyStaticCN(){
   if(typeof SIDE !== "undefined")         SIDE.label = "🍽️ 要加配菜吗？";
   if(typeof SIDE_NO_SPAG !== "undefined") SIDE_NO_SPAG.label = "🍽️ 要加配菜吗？";
   if(typeof SAUCE !== "undefined")        SAUCE.label = "🍝 选择您的意面酱";
-  document.documentElement.lang = "zh-CN";
 }
 // Re-apply after any DOM update so async re-renders can't revert it.
 // applyStaticCN is idempotent: once translated the English keys no longer match.
