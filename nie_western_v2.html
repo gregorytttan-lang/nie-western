@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v84</title>
+<title>NIE Western Food v86</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase: try gstatic first, fall back to jsdelivr if that CDN is blocked -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -240,7 +240,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
           🍽️ Dine In
         </button>
         <button id="opt-takeaway" onclick="setDining('takeaway')" style="flex:1;padding:14px;border-radius:12px;background:#fff;color:#78716C;border:2px solid #E5E0D8;font-size:14px;font-weight:400;transition:all 0.15s">
-          🥡 Take Away <span style="font-size:12px">(+$0.30)</span>
+          🥡 Take Away <span id="ta-fee" style="font-size:12px">(+$0.30)</span>
         </button>
       </div>
     </div>
@@ -993,9 +993,35 @@ function isSnacksOnly(){
   return cart.length > 0 && cart.every(x => isSnackOnly(x.id));
 }
 
+// Shawarma is wrapped, not boxed — no packaging charge.
+// Kept separate from isMain() because isMain() also controls kitchen routing
+// and add-on gating, which shawarma must still qualify for.
+// Show the real packaging fee for what is actually in the cart
+function updateTakeawayFeeLabel(){
+  const el = document.getElementById("ta-fee");
+  if(!el) return;
+  const boxes = cart.filter(x=>needsTakeawayBox(x.id)).reduce((s,x)=>s+x.qty,0);
+  el.textContent = boxes > 0 ? "(+" + fmtS(boxes * 0.30) + ")" : "(no extra charge)";
+}
+
+// Items served as a wrap only — no takeaway box, so no 30c packaging charge.
+// Anything with rice / fries / salad still needs a box and is NOT listed here.
+// To exempt another item later, add its id below.
+const NO_BOX_ITEMS = [
+  "sh7",   // Beef Shawarma      $5.90
+  "sh11",  // Chicken Shawarma   $4.90
+];
+
+// Kept separate from isMain() because isMain() also controls kitchen routing
+// and add-on gating, which these items must still qualify for.
+function needsTakeawayBox(id){
+  if(NO_BOX_ITEMS.indexOf(id) !== -1) return false;
+  return isMain(id);
+}
+
 function takeawayCharge(){
   if(diningOption!=="takeaway") return 0;
-  const qty = cart.filter(x=>isMain(x.id)).reduce((s,x)=>s+x.qty,0);
+  const qty = cart.filter(x=>needsTakeawayBox(x.id)).reduce((s,x)=>s+x.qty,0);
   return qty * 0.30;
 }
 
@@ -1168,6 +1194,7 @@ function skipSides(){
 function openCart(){
   diningOption = null;
   renderCartModal();
+  updateTakeawayFeeLabel();
   // Always re-check dining option visibility
   const dw = document.getElementById("dining-wrapper");
   const payBtn = document.getElementById("pay-now-btn");
