@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v86</title>
+<title>NIE Western Food v87</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase: try gstatic first, fall back to jsdelivr if that CDN is blocked -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -2196,6 +2196,24 @@ function saveFloat(val){
 
 function saveDailyToSheets(){
   const todayStr = today();
+  const dayKey = new Date().toISOString().slice(0,10);
+  // Check whether ANY tablet already saved today
+  db.ref("archives/sheets_saved").child(dayKey).once("value")
+    .then(snap=>{
+      const prev = snap.val();
+      if(prev && prev.at){
+        const t = new Date(prev.at).toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit",hour12:true});
+        const msg = "Today's sales were already saved to Google Sheets at " + t + ".\n\n"
+                  + "Saving again will add a DUPLICATE row.\n\nSave anyway?";
+        if(!confirm(msg)) return;
+      }
+      doSaveDailyToSheets(dayKey);
+    })
+    .catch(()=>{ doSaveDailyToSheets(dayKey); });   // offline: fall through rather than block
+}
+
+function doSaveDailyToSheets(dayKey){
+  const todayStr = today();
   // Merge Firebase orders with locally saved snacks orders
   const localSnacks = ls("snacks_orders_nie", []);
   const allOrders = [...orders];
@@ -2221,7 +2239,8 @@ function saveDailyToSheets(){
   const topItems = Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>n+" x"+q);
 
   const float2 = parseFloat(ls("float_nie",0))||0;
-  const payouts2 = ls("payouts_nie",[]);
+  const todayISO = new Date().toISOString().slice(0,10);
+  const payouts2 = ls("payouts_nie",[]).filter(p=>p.date===todayISO);
   const payoutTotal2 = payouts2.reduce((s,p)=>s+p.amount,0);
   const cashInBox2 = float2 + todayCash - payoutTotal2;
 
@@ -2243,14 +2262,20 @@ function saveDailyToSheets(){
   // Save daily sales first, then save all payouts
   fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(data)})
     .then(()=>{
-      // Save only TODAY's payouts (not all-time, avoids duplicates)
-      const todayPayouts3 = ls("payouts_nie",[]).filter(p=>p.date===new Date().toISOString().slice(0,10));
-      if(todayPayouts3.length){
-        const payoutPromises = todayPayouts3.map(p=>{
+      // Mark the day as saved so other tablets warn before saving again
+      try{ db.ref("archives/sheets_saved").child(dayKey).set({at: Date.now()}); }catch(e){}
+
+      // Send only payouts not already sent — prevents re-sending on every save
+      const sent = ls("payouts_sent_nie", []);
+      const toSend = ls("payouts_nie",[]).filter(p=>p.date===dayKey && sent.indexOf(p.id)===-1);
+      if(toSend.length){
+        const payoutPromises = toSend.map(p=>{
           const pd = {type:"payout", date:p.date, supplier:p.supplier, item:p.item, amount:p.amount, notes:p.notes||""};
           return fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(pd)});
         });
-        return Promise.all(payoutPromises);
+        return Promise.all(payoutPromises).then(()=>{
+          lss("payouts_sent_nie", sent.concat(toSend.map(p=>p.id)));
+        });
       }
     })
     .then(()=>{
