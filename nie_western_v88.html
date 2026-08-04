@@ -997,9 +997,12 @@ function removeFromCart(cartKey){
 // c1 Shawarma · c2 Chicken Mains · c3 Fish Mains · c4 Spaghetti · c6 Breakfast
 const MAIN_CATEGORIES = ["c1","c2","c3","c4","c6"];
 
+// Snacks (c5) that are still served in a box, so they get the 30c packaging
+// charge and count as a "main" for add-on gating.
+const BOXED_SNACKS = ["sn0", "sn13"];   // Cheese Fries, Fries
+
 function isMain(id){
-  // Cheese Fries is served in a box, so it gets the takeaway charge too.
-  if(id === "sn0") return true;
+  if(BOXED_SNACKS.indexOf(id) !== -1) return true;
   for(const cat of menu){
     if(MAIN_CATEGORIES.indexOf(cat.id) === -1) continue;
     if(cat.items.find(i=>i.id===id)) return true;
