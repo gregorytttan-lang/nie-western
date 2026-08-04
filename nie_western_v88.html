@@ -603,39 +603,49 @@ const tme   = ts => new Date(ts).toLocaleTimeString("en-SG",{hour:"2-digit",minu
 function ls(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 
+// Highest queue number actually issued today, read from the synced orders
+// list. This is the safety net for the counter — it cannot go backwards.
+function todayQueueMax(){
+  const t = today();
+  return orders.reduce((m,o)=>{
+    if(!o || !o.queueNo) return m;
+    if(new Date(o.createdAt).toDateString() !== t) return m;
+    return Math.max(m, o.queueNo);
+  }, 0);
+}
+
+// Used only when Firebase will not answer. Never fall back to a per-device
+// counter: every customer phone starts that at zero, so it hands out #001
+// while the stall is really on #045 — and two phones offline at once both
+// get #001. The orders list is already synced, so the highest number issued
+// today is a far safer basis.
+function fallbackQ(){
+  const n = todayQueueMax() + 1;
+  try{ db.ref("queue/" + today()).set(n); }catch(e){}
+  return n;
+}
+
 function nextQ(){
   return new Promise((resolve)=>{
     const t = today();
     const qRef = db.ref("queue/" + t);
     let resolved = false;
-    const timeout = setTimeout(()=>{
-      if(!resolved){
-        resolved = true;
-        // Fallback — use local counter to avoid large random numbers
-        const localKey = "localQ_" + t;
-        const localN = (ls(localKey, 0) || 0) + 1;
-        lss(localKey, localN);
-        resolve(localN);
-      }
-    }, 3000);
+    const done = n => {
+      if(resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      resolve(n);
+    };
+    // 8s, not 3s. The customer is already looking at "Processing…", and a
+    // slow reply is much better than a duplicate queue number.
+    const timer = setTimeout(()=>done(fallbackQ()), 8000);
     qRef.transaction(current=>{
-      return (current||0) + 1;
+      // If the counter node was cleared or is behind, recover from the real
+      // orders rather than restarting at 1.
+      return Math.max(current || 0, todayQueueMax()) + 1;
     }, (err, committed, snap)=>{
-      if(!resolved){
-        resolved = true;
-        clearTimeout(timeout);
-        if(committed && snap){
-          // Also update local counter to stay in sync
-          lss("localQ_" + t, snap.val());
-          resolve(snap.val());
-        } else {
-          // Firebase failed — use local counter
-          const localKey = "localQ_" + t;
-          const localN = (ls(localKey, 0) || 0) + 1;
-          lss(localKey, localN);
-          resolve(localN);
-        }
-      }
+      if(committed && snap && snap.val()) done(snap.val());
+      else done(fallbackQ());
     });
   });
 }
