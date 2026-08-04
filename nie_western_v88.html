@@ -781,6 +781,15 @@ const urlParams = new URLSearchParams(window.location.search);
 const isSnacksMode = urlParams.get('snacks') === '1';
 let modItem = null;
 let modChoices = {};
+
+// Payouts, the opening float and the Sheets "already sent" markers are shared
+// across every device through Firebase. localStorage is only an offline cache.
+// Reading localStorage directly is what made payouts keyed in on the tablet
+// invisible to the phone when sending the WhatsApp report.
+let payoutStore = ls("payouts_nie", []);
+let payoutsSent = ls("payouts_sent_nie", []);
+let floatStore  = parseFloat(ls("float_nie", 0)) || 0;
+function getPayouts(){ return payoutStore; }
 let pendingOrder = null;
 let diningOption = null; // null = not yet selected
 
@@ -1807,9 +1816,9 @@ function renderReports(){
   const allCash       = orders.filter(o=>o.paymentMethod==="cash").reduce((s,o)=>s+o.total,0);
 
   // Float and payouts
-  const float = parseFloat(ls("float_nie", 0)) || 0;
+  const float = floatStore;
   const todayDateStr = new Date().toISOString().slice(0,10);
-  const payouts = ls("payouts_nie",[]).filter(p=>p.date===todayDateStr);
+  const payouts = getPayouts().filter(p=>p.date===todayDateStr);
   const payoutTotal = payouts.reduce((s,p)=>s+p.amount,0);
   const cashInBox = float + todayCash - payoutTotal;
 
@@ -2220,7 +2229,9 @@ function stopTrackingOrder(){
 }
 
 function saveFloat(val){
-  lss("float_nie", parseFloat(val)||0);
+  floatStore = parseFloat(val) || 0;
+  lss("float_nie", floatStore);
+  db.ref("float").set(floatStore);   // share with every device
   renderReports();
 }
 
@@ -2268,9 +2279,9 @@ function doSaveDailyToSheets(dayKey){
   }));
   const topItems = Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>n+" x"+q);
 
-  const float2 = parseFloat(ls("float_nie",0))||0;
+  const float2 = floatStore;
   const todayISO = new Date().toISOString().slice(0,10);
-  const payouts2 = ls("payouts_nie",[]).filter(p=>p.date===todayISO);
+  const payouts2 = getPayouts().filter(p=>p.date===todayISO);
   const payoutTotal2 = payouts2.reduce((s,p)=>s+p.amount,0);
   const cashInBox2 = float2 + todayCash - payoutTotal2;
 
@@ -2296,15 +2307,16 @@ function doSaveDailyToSheets(dayKey){
       try{ db.ref("archives/sheets_saved").child(dayKey).set({at: Date.now()}); }catch(e){}
 
       // Send only payouts not already sent — prevents re-sending on every save
-      const sent = ls("payouts_sent_nie", []);
-      const toSend = ls("payouts_nie",[]).filter(p=>p.date===dayKey && sent.indexOf(p.id)===-1);
+      const sent = payoutsSent;
+      const toSend = getPayouts().filter(p=>p.date===dayKey && sent.indexOf(p.id)===-1);
       if(toSend.length){
         const payoutPromises = toSend.map(p=>{
           const pd = {type:"payout", date:p.date, supplier:p.supplier, item:p.item, amount:p.amount, notes:p.notes||""};
           return fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(pd)});
         });
         return Promise.all(payoutPromises).then(()=>{
-          lss("payouts_sent_nie", sent.concat(toSend.map(p=>p.id)));
+          // Mark as sent in Firebase so another device won't send them again
+          toSend.forEach(p=>{ try{ db.ref("archives/payouts_sent/"+p.id).set(true); }catch(e){} });
         });
       }
     })
@@ -2358,7 +2370,7 @@ function sendWhatsApp(){
   msg += "─────────────────────\n";
 
   // Supplier Payouts
-  const todayPayouts = ls("payouts_nie",[]).filter(p=>p.date===new Date().toISOString().slice(0,10));
+  const todayPayouts = getPayouts().filter(p=>p.date===new Date().toISOString().slice(0,10));
   if(todayPayouts.length){
     const totalPayout = todayPayouts.reduce((s,p)=>s+p.amount,0);
     msg += "🧾 *Supplier Payouts:*\n";
@@ -2384,9 +2396,11 @@ function addPayout(){
   const notes    = document.getElementById("pay-notes").value.trim();
   if(!supplier||!item||!amount||!date){ alert("Please fill in all required fields."); return; }
   const payout = {id:"PAY-"+Date.now(), supplier, item, amount, date, notes, createdAt:Date.now()};
-  const payouts = ls("payouts_nie",[]);
-  payouts.push(payout);
-  lss("payouts_nie", payouts);
+  // Show it straight away, then share it with every device
+  payoutStore = payoutStore.concat([payout]);
+  lss("payouts_nie", payoutStore);
+  db.ref("payouts/" + payout.id).set(payout)
+    .catch(()=>toast("\u26a0\ufe0f Saved on this device only \u2014 check internet","#DC2626"));
   document.getElementById("pay-supplier").value="";
   document.getElementById("pay-item").value="";
   document.getElementById("pay-amount").value="";
@@ -2397,13 +2411,14 @@ function addPayout(){
 
 function deletePayout(id){
   if(!confirm("Delete this payout?")) return;
-  const payouts = ls("payouts_nie",[]).filter(p=>p.id!==id);
-  lss("payouts_nie", payouts);
+  payoutStore = payoutStore.filter(p=>p.id!==id);
+  lss("payouts_nie", payoutStore);
+  db.ref("payouts/" + id).remove();
   renderPayouts();
 }
 
 function renderPayouts(){
-  const payouts = ls("payouts_nie",[]).sort((a,b)=>b.createdAt-a.createdAt);
+  const payouts = getPayouts().slice().sort((a,b)=>b.createdAt-a.createdAt);
   const total   = payouts.reduce((s,p)=>s+p.amount,0);
   const el = document.getElementById("payout-total-display");
   const list = document.getElementById("payout-list");
@@ -2492,7 +2507,7 @@ function archiveMonth(){
     dailyMap[d].rev+=o.total; dailyMap[d].count++;
   });
 
-  const payouts = ls("payouts_nie",[]).filter(p=>{
+  const payouts = getPayouts().filter(p=>{
     return p.date && p.date.startsWith(monthKey);
   });
   const payoutTotal = payouts.reduce((s,p)=>s+p.amount,0);
@@ -2918,6 +2933,29 @@ db.ref("availability").on("value", snap=>{
   });
   saveMenu();
   renderMenu();
+});
+
+// Keep payouts, float and sent-markers in step across tablet and phone
+db.ref("payouts").on("value", snap=>{
+  const data = snap.val();
+  payoutStore = data ? Object.values(data) : [];
+  lss("payouts_nie", payoutStore);
+  renderPayouts();
+  renderReports();
+});
+
+db.ref("float").on("value", snap=>{
+  const v = snap.val();
+  if(v === null || v === undefined) return;
+  floatStore = parseFloat(v) || 0;
+  lss("float_nie", floatStore);
+  renderReports();
+});
+
+db.ref("archives/payouts_sent").on("value", snap=>{
+  const data = snap.val();
+  payoutsSent = data ? Object.keys(data) : [];
+  lss("payouts_sent_nie", payoutsSent);
 });
 
 // Save order to Firebase
