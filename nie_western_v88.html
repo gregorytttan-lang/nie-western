@@ -920,6 +920,17 @@ function handleAdd(id){
     toast("⚠️ Please order a main item first!", "#C4572A");
     return;
   }
+
+  // Already in the cart — just bump the quantity and keep the sides the
+  // customer already picked. Ordering 3 chicken chops is now 3 taps instead
+  // of walking through the options popup 3 times.
+  const existing = cart.filter(x=>x.id===id);
+  if(existing.length){
+    existing[existing.length-1].qty++;
+    renderMenu();
+    return;
+  }
+
   if(item.modifiers && item.modifiers.length>0){
     // Filter modifiers based on admin toggles
     const sideOn = ls("mod_side_nie", true);
