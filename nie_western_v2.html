@@ -108,6 +108,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
         <span><span id="txt-special-order">Special order? Call <strong>Gregory 90628726</strong></span></span>
       </div>
     </div>
+    <div id="special-card" style="display:none;padding:0 12px 12px"></div>
     <div id="cat-tabs" style="display:flex;overflow-x:auto;scrollbar-width:none;padding:0 12px"></div>
   </div>
   <!-- Recovery Banner -->
@@ -786,6 +787,11 @@ let modChoices = {};
 // across every device through Firebase. localStorage is only an offline cache.
 // Reading localStorage directly is what made payouts keyed in on the tablet
 // invisible to the phone when sending the WhatsApp report.
+// Today's Special — one dish, limited quantity, shared via Firebase.
+const SPECIAL_ID = "SPX";
+let special = null;             // synced from Firebase
+let reservedSpecialQty = 0;     // held between Pay Now and payment confirmed
+
 let payoutStore = ls("payouts_nie", []);
 let payoutsSent = ls("payouts_sent_nie", []);
 let floatStore  = parseFloat(ls("float_nie", 0)) || 0;
@@ -904,13 +910,43 @@ function renderMenu(){
     }).join("")}
   `;
   updateCartFab();
+  renderSpecial();
 }
 
 function switchCat(i){ curCat=i; renderMenu(); }
 
 // Snacks auto-switch handled in renderMenu
 
-function getItem(id){ for(const c of menu) for(const i of c.items) if(i.id===id) return i; return null; }
+function getItem(id){
+  if(id === SPECIAL_ID) return specialItem();
+  for(const c of menu) for(const i of c.items) if(i.id===id) return i;
+  return null;
+}
+
+// Build the special as a normal menu item so the whole cart / kitchen /
+// reporting path treats it like any other dish.
+function specialItem(){
+  if(!special || !special.active) return null;
+  const base = special.mode === "existing" ? (function(){
+    for(const c of menu) for(const i of c.items) if(i.id===special.itemId) return i;
+    return null;
+  })() : null;
+  return {
+    id: SPECIAL_ID,
+    name: special.name || (base ? base.name : "Today's Special"),
+    desc: special.desc || (base ? base.desc : ""),
+    price: Number(special.price) || 0,
+    modifiers: base ? base.modifiers : undefined
+  };
+}
+
+function specialLeft(){
+  return (special && special.active) ? (Number(special.qtyLeft) || 0) : 0;
+}
+
+function specialInCart(){
+  return cart.filter(x=>x.id===SPECIAL_ID).reduce((s,x)=>s+x.qty, 0);
+}
 
 function isAddon(id){
   const addonCat = menu.find(c=>c.id==="c7");
@@ -938,6 +974,15 @@ function handleAdd(id){
   if(isAddon(id) && !cartHasMain()){
     toast("⚠️ Please order a main item first!", "#C4572A");
     return;
+  }
+
+  // Never let the cart hold more of the special than is left today
+  if(id === SPECIAL_ID){
+    const left = specialLeft();
+    if(specialInCart() >= left){
+      toast(left > 0 ? ("Only " + left + " left today") : "Sold out for today", "#C4572A");
+      return;
+    }
   }
 
   // Already in the cart — just bump the quantity and keep the sides the
@@ -1011,6 +1056,7 @@ const MAIN_CATEGORIES = ["c1","c2","c3","c4","c6"];
 const BOXED_SNACKS = ["sn0", "sn13"];   // Cheese Fries, Fries
 
 function isMain(id){
+  if(id === SPECIAL_ID) return true;   // kitchen + 30c box, like a main
   if(BOXED_SNACKS.indexOf(id) !== -1) return true;
   for(const cat of menu){
     if(MAIN_CATEGORIES.indexOf(cat.id) === -1) continue;
@@ -1105,6 +1151,92 @@ function updateCartFab(){
   } else {
     fab.classList.add("hidden");
   }
+}
+
+// ── TODAY'S SPECIAL ──────────────────────────────────────────────────────────
+function renderSpecial(){
+  const el = document.getElementById("special-card");
+  if(!el) return;
+  const s = special;
+  if(!s || !s.active){ el.style.display="none"; el.innerHTML=""; return; }
+  el.style.display = "block";
+
+  const left  = Number(s.qtyLeft) || 0;
+  const sold  = left <= 0;
+  const inCart = specialInCart();
+  const usual = Number(s.usualPrice) || 0;
+  const price = Number(s.price) || 0;
+  const showStrike = usual > price;
+  const lowStock = !sold && left <= 5;
+
+  const bg = sold
+    ? "background:#F5F3F0;border:2px solid #E5E0D8"
+    : "background:linear-gradient(135deg,#C4572A 0%,#9A3E1C 100%);border:2px solid #9A3E1C";
+  const txt = sold ? "#A8A29E" : "#fff";
+
+  el.innerHTML = `
+    <div style="${bg};border-radius:16px;padding:16px 18px;box-shadow:${sold?"none":"0 4px 16px rgba(196,87,42,0.28)"}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:800;letter-spacing:0.14em;color:${sold?"#A8A29E":"rgba(255,255,255,0.85)"}">
+          ⭐ TODAY'S SPECIAL
+        </span>
+        ${sold
+          ? `<span style="background:#78716C;color:#fff;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:800;letter-spacing:0.06em">SOLD OUT</span>`
+          : (lowStock
+              ? `<span style="background:#FEF3C7;color:#92400E;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:800">Only ${left} left!</span>`
+              : "")}
+      </div>
+
+      <div style="font-family:'Playfair Display',serif;font-size:21px;font-weight:700;color:${txt};line-height:1.25">${s.name||""}</div>
+      ${s.desc?`<div style="font-size:13px;color:${sold?"#A8A29E":"rgba(255,255,255,0.75)"};line-height:1.5;margin-top:4px">${s.desc}</div>`:""}
+      ${s.tagline&&!sold?`<div style="font-size:12px;color:#FDE68A;font-weight:700;margin-top:6px">${s.tagline}</div>`:""}
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:12px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font-family:'Playfair Display',serif;font-size:26px;font-weight:800;color:${sold?"#A8A29E":"#fff"}">${fmtS(price)}</span>
+          ${showStrike?`<span style="font-size:15px;color:${sold?"#D4CFC8":"rgba(255,255,255,0.6)"};text-decoration:line-through">${fmtS(usual)}</span>`:""}
+        </div>
+        ${sold
+          ? `<span style="font-size:13px;font-weight:700;color:#A8A29E">Back tomorrow</span>`
+          : (inCart===0
+              ? `<button onclick="handleAdd('${SPECIAL_ID}')" style="background:#fff;color:#9A3E1C;border-radius:24px;padding:11px 24px;font-size:15px;font-weight:800">+ Add</button>`
+              : `<div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.18);border-radius:24px;padding:5px 8px">
+                   <button onclick="removeSpecial()" style="width:32px;height:32px;border-radius:50%;background:#fff;color:#9A3E1C;font-size:19px;font-weight:700;display:flex;align-items:center;justify-content:center">−</button>
+                   <span style="font-weight:800;color:#fff;font-size:17px;min-width:20px;text-align:center">${inCart}</span>
+                   <button onclick="handleAdd('${SPECIAL_ID}')" style="width:32px;height:32px;border-radius:50%;background:#fff;color:#9A3E1C;font-size:19px;font-weight:700;display:flex;align-items:center;justify-content:center">+</button>
+                 </div>`)}
+      </div>
+    </div>`;
+}
+
+function removeSpecial(){
+  const lines = cart.filter(x=>x.id===SPECIAL_ID);
+  if(!lines.length) return;
+  removeFromCart(lines[lines.length-1].cartKey);
+}
+
+// Hold stock the moment the customer taps Pay Now. A transaction, like the
+// queue counter, so two phones cannot both claim the last portion.
+function reserveSpecial(qty){
+  return new Promise(resolve=>{
+    let settled = false, granted = 0;
+    const finish = n => { if(!settled){ settled = true; resolve(n); } };
+    const timer = setTimeout(()=>finish(0), 8000);
+    db.ref("special/qtyLeft").transaction(cur=>{
+      const left = (cur === null || cur === undefined) ? 0 : cur;
+      granted = Math.min(qty, left);
+      return left - granted;
+    }, (err, committed)=>{
+      clearTimeout(timer);
+      finish(committed ? granted : 0);
+    });
+  });
+}
+
+// Customer backed out before paying — put the portions back.
+function releaseSpecial(qty){
+  if(qty <= 0) return;
+  try{ db.ref("special/qtyLeft").transaction(cur=>(cur || 0) + qty); }catch(e){}
 }
 
 // ── MODIFIER MODAL ───────────────────────────────────────────────────────────
@@ -1288,13 +1420,35 @@ function renderCartModal(){
 }
 
 // ── PAYMENT ──────────────────────────────────────────────────────────────────
-function proceedToPayment(){
+async function proceedToPayment(){
   if(!cart.length) return;
   // Skip dining option for snacks-only orders
   if(isSnacksOnly()){
     diningOption = 'dinein';  // default, won't be shown
   }
   if(!diningOption){ alert("Please select Dine In or Take Away first."); return; }
+
+  // Reserve the special before the QR appears, so nobody pays for a portion
+  // that has already gone to someone else.
+  const spLine = cart.find(x=>x.id===SPECIAL_ID);
+  if(spLine){
+    const granted = await reserveSpecial(spLine.qty);
+    if(granted <= 0){
+      cart = cart.filter(x=>x.id!==SPECIAL_ID);
+      toast("😔 Today's Special just sold out — removed from your order", "#DC2626");
+      renderMenu(); updateCartFab();
+      if(!cart.length){ closeCart(); return; }
+      renderCartModal();
+      return;
+    }
+    if(granted < spLine.qty){
+      spLine.qty = granted;
+      toast("Only " + granted + " of the Special left — order adjusted", "#C4572A");
+      renderMenu(); renderCartModal(); updateCartFab();
+    }
+    reservedSpecialQty = granted;
+  }
+
   const remarks = document.getElementById("order-remarks").value.trim();
   pendingOrder = {id:uid(), items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
   closeCart();
@@ -1339,6 +1493,8 @@ function proceedToPayment(){
 }
 
 function closePayment(){
+  // Backed out without paying — return the held portions to the pool
+  if(reservedSpecialQty > 0){ releaseSpecial(reservedSpecialQty); reservedSpecialQty = 0; }
   const m = document.getElementById("pay-modal");
   m.classList.add("hidden"); m.style.display="none";
   pendingOrder = null;
@@ -1351,6 +1507,8 @@ function closePayment(){
 
 async function confirmPayment(paymentMethod='paynow'){
   if(!pendingOrder) return;
+  // Paid — the reservation is now consumed, don't let closePayment refund it
+  reservedSpecialQty = 0;
   // Show loading state
   const btn1 = document.querySelector("button[onclick=\"confirmPayment('paynow')\"]");
   const btn2 = document.querySelector("button[onclick=\"confirmPayment('cash')\"]");
@@ -1727,6 +1885,105 @@ function adminTab(t){
 
 function renderAdmin(){ adminTab("menu-mgmt"); renderStallStatus(); }
 
+function renderSpecialAdmin(){
+  const s = special || {};
+  const mode = s.mode || "existing";
+  const running = !!s.active;
+  const left = Number(s.qtyLeft) || 0;
+  const opts = menu.map(c=>c.items.map(i=>
+    `<option value="${i.id}" ${s.itemId===i.id?"selected":""}>${i.name} — ${fmtS(i.price)}</option>`).join("")).join("");
+  const inp = "width:100%;padding:10px 12px;border:1px solid #E5E0D8;border-radius:8px;font-size:13px;background:#fff;outline:none;margin-bottom:8px";
+
+  return `
+    <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">
+      <div style="background:#C4572A;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700;color:#fff">⭐ Today's Special</div>
+        <div id="sp-left" style="font-size:12px;font-weight:700;color:#fff">${running ? ("Live — " + left + " left of " + (s.qtyTotal||0)) : "Not running"}</div>
+      </div>
+      <div style="padding:16px">
+        <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Type</div>
+        <select id="sp-mode" onchange="specialModeChange()" style="${inp}">
+          <option value="existing" ${mode==="existing"?"selected":""}>Discount an item already on the menu</option>
+          <option value="custom" ${mode==="custom"?"selected":""}>A one-off dish (not on the menu)</option>
+        </select>
+
+        <div id="sp-existing-wrap" style="display:${mode==="existing"?"block":"none"}">
+          <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Which item</div>
+          <select id="sp-item" style="${inp}">${opts}</select>
+        </div>
+
+        <div id="sp-custom-wrap" style="display:${mode==="custom"?"block":"none"}">
+          <input id="sp-name" placeholder="Dish name" value="${mode==="custom"?(s.name||""):""}" style="${inp}">
+          <input id="sp-desc" placeholder="Short description (optional)" value="${mode==="custom"?(s.desc||""):""}" style="${inp}">
+          <input id="sp-usual" type="number" step="0.10" placeholder="Usual price (optional, for the strike-through)" value="${mode==="custom"?(s.usualPrice||""):""}" style="${inp}">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <div style="font-size:11px;color:#78716C;font-weight:600;margin-bottom:4px">Special price ($)</div>
+            <input id="sp-price" type="number" step="0.10" value="${s.price||""}" style="${inp}">
+          </div>
+          <div>
+            <div style="font-size:11px;color:#78716C;font-weight:600;margin-bottom:4px">How many today</div>
+            <input id="sp-qty" type="number" step="1" min="1" value="${s.qtyTotal||""}" style="${inp}">
+          </div>
+        </div>
+        <input id="sp-tag" placeholder="Tagline, e.g. Today only!" value="${s.tagline||""}" style="${inp}">
+
+        <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400E;line-height:1.6;margin-bottom:12px">
+          Counts down as customers pay. At zero it greys out and shows SOLD OUT.
+          Saving again resets the count — use it to top up if you cook more.
+        </div>
+
+        <button onclick="saveSpecial()" style="width:100%;padding:13px;background:#C4572A;color:#fff;border-radius:10px;font-size:14px;font-weight:700;margin-bottom:8px">⭐ Save &amp; Make It Live</button>
+        ${running?`<button onclick="stopSpecial()" style="width:100%;padding:11px;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:10px;font-size:13px;font-weight:600">Turn Off Special</button>`:""}
+      </div>
+    </div>`;
+}
+
+function specialModeChange(){
+  const m = document.getElementById("sp-mode").value;
+  document.getElementById("sp-existing-wrap").style.display = m==="existing" ? "block" : "none";
+  document.getElementById("sp-custom-wrap").style.display   = m==="custom"   ? "block" : "none";
+}
+
+function saveSpecial(){
+  const mode  = document.getElementById("sp-mode").value;
+  const price = parseFloat(document.getElementById("sp-price").value);
+  const qty   = parseInt(document.getElementById("sp-qty").value, 10);
+  if(!(price > 0)){ alert("Please enter the special price."); return; }
+  if(!(qty > 0)){ alert("Please enter how many you have today."); return; }
+
+  let name = "", desc = "", usual = 0, itemId = "";
+  if(mode === "existing"){
+    itemId = document.getElementById("sp-item").value;
+    let base = null;
+    for(const c of menu) for(const i of c.items) if(i.id===itemId) base = base || i;
+    if(!base){ alert("Please pick an item."); return; }
+    name = base.name; desc = base.desc || ""; usual = base.price;
+  } else {
+    name  = document.getElementById("sp-name").value.trim();
+    desc  = document.getElementById("sp-desc").value.trim();
+    usual = parseFloat(document.getElementById("sp-usual").value) || 0;
+    if(!name){ alert("Please enter the dish name."); return; }
+  }
+
+  const rec = {
+    active:true, mode, itemId, name, desc, price,
+    usualPrice: usual, tagline: document.getElementById("sp-tag").value.trim(),
+    qtyTotal: qty, qtyLeft: qty, setAt: Date.now()
+  };
+  db.ref("special").set(rec)
+    .then(()=>{ toast("⭐ Special is live — " + qty + " available"); renderAdminMenu(); })
+    .catch(()=>toast("❌ Could not save — check internet", "#DC2626"));
+}
+
+function stopSpecial(){
+  if(!confirm("Turn off Today's Special?")) return;
+  db.ref("special").update({active:false})
+    .then(()=>{ toast("Special turned off", "#78716C"); renderAdminMenu(); });
+}
+
 function renderAdminMenu(){
   const sideOn = ls("mod_side_nie", true);
   const soupOn = ls("mod_soup_nie", true);
@@ -1752,7 +2009,7 @@ function renderAdminMenu(){
       </div>
     </div>`;
 
-  document.getElementById("admin-menu-mgmt").innerHTML = modSection + menu.map(cat=>`
+  document.getElementById("admin-menu-mgmt").innerHTML = renderSpecialAdmin() + modSection + menu.map(cat=>`
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">
       <div style="background:#F5F3F0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
         <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">${cat.emoji} ${cat.name}</div>
@@ -2933,6 +3190,19 @@ db.ref("availability").on("value", snap=>{
   });
   saveMenu();
   renderMenu();
+});
+
+// Today's Special — live on every device
+db.ref("special").on("value", snap=>{
+  special = snap.val();
+  renderSpecial();
+  // Update the admin readout without re-rendering the form and wiping typing
+  const l = document.getElementById("sp-left");
+  if(l){
+    l.textContent = (special && special.active)
+      ? ("Live — " + (Number(special.qtyLeft)||0) + " left of " + (special.qtyTotal||0))
+      : "Not running";
+  }
 });
 
 // Keep payouts, float and sent-markers in step across tablet and phone
