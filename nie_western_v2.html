@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>NIE Western Food v87</title>
+<title>NIE Western Food v88</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Firebase: try gstatic first, fall back to jsdelivr if that CDN is blocked -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -603,39 +603,49 @@ const tme   = ts => new Date(ts).toLocaleTimeString("en-SG",{hour:"2-digit",minu
 function ls(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}}
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 
+// Highest queue number actually issued today, read from the synced orders
+// list. This is the safety net for the counter — it cannot go backwards.
+function todayQueueMax(){
+  const t = today();
+  return orders.reduce((m,o)=>{
+    if(!o || !o.queueNo) return m;
+    if(new Date(o.createdAt).toDateString() !== t) return m;
+    return Math.max(m, o.queueNo);
+  }, 0);
+}
+
+// Used only when Firebase will not answer. Never fall back to a per-device
+// counter: every customer phone starts that at zero, so it hands out #001
+// while the stall is really on #045 — and two phones offline at once both
+// get #001. The orders list is already synced, so the highest number issued
+// today is a far safer basis.
+function fallbackQ(){
+  const n = todayQueueMax() + 1;
+  try{ db.ref("queue/" + today()).set(n); }catch(e){}
+  return n;
+}
+
 function nextQ(){
   return new Promise((resolve)=>{
     const t = today();
     const qRef = db.ref("queue/" + t);
     let resolved = false;
-    const timeout = setTimeout(()=>{
-      if(!resolved){
-        resolved = true;
-        // Fallback — use local counter to avoid large random numbers
-        const localKey = "localQ_" + t;
-        const localN = (ls(localKey, 0) || 0) + 1;
-        lss(localKey, localN);
-        resolve(localN);
-      }
-    }, 3000);
+    const done = n => {
+      if(resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      resolve(n);
+    };
+    // 8s, not 3s. The customer is already looking at "Processing…", and a
+    // slow reply is much better than a duplicate queue number.
+    const timer = setTimeout(()=>done(fallbackQ()), 8000);
     qRef.transaction(current=>{
-      return (current||0) + 1;
+      // If the counter node was cleared or is behind, recover from the real
+      // orders rather than restarting at 1.
+      return Math.max(current || 0, todayQueueMax()) + 1;
     }, (err, committed, snap)=>{
-      if(!resolved){
-        resolved = true;
-        clearTimeout(timeout);
-        if(committed && snap){
-          // Also update local counter to stay in sync
-          lss("localQ_" + t, snap.val());
-          resolve(snap.val());
-        } else {
-          // Firebase failed — use local counter
-          const localKey = "localQ_" + t;
-          const localN = (ls(localKey, 0) || 0) + 1;
-          lss(localKey, localN);
-          resolve(localN);
-        }
-      }
+      if(committed && snap && snap.val()) done(snap.val());
+      else done(fallbackQ());
     });
   });
 }
@@ -708,7 +718,7 @@ const DEFAULT_MENU = [
     
     {id:"f8",name:"Fish & Chips",price:4.80,desc:"Classic crispy fish with golden fries — a timeless combo.",modifiers:[SIDE]},
     {id:"f9",name:"Tempura Fish & Chips",price:4.80,desc:"Light airy tempura batter, golden fries and a fresh side salad.",modifiers:[SIDE]},
-    {id:"f10",name:"Garden Salad",price:4.50,desc:"Fresh crisp greens tossed lightly — clean and refreshing."},
+    {id:"f12",name:"Garden Salad",price:4.50,desc:"Fresh crisp greens tossed lightly — clean and refreshing."},
     {id:"f11",name:"Mushroom Soup",price:2.00,desc:"Warm velvety mushroom soup — comfort in a bowl."},
   ]},
   {id:"c4",name:"Spaghetti",emoji:"🍝",items:[
@@ -730,7 +740,7 @@ const DEFAULT_MENU = [
     {id:"sn10",name:"Chicken Cheese Sausage",price:2.00,desc:"Savoury chicken sausage with a cheesy surprise inside."},
     {id:"sn11",name:"Fish Burger",price:2.00,desc:"Crispy fish fillet in a soft bun — simple and always satisfying."},
     {id:"sn12",name:"Hash Browns (3 pcs)",price:2.00,desc:"Golden crispy hash browns — perfect any time of day."},
-    {id:"sn13",name:"Onion Rings",price:2.00,desc:"Crunchy battered rings with that satisfying snap every time."},
+    {id:"sn15",name:"Onion Rings",price:2.00,desc:"Crunchy battered rings with that satisfying snap every time."},
     {id:"sn14",name:"Sandwich",price:1.60,desc:"A simple fuss-free sandwich that always hits the spot."},
   ]},
   {id:"c6",name:"Breakfast",emoji:"🥞",avail:"before-1045",items:[
@@ -771,6 +781,15 @@ const urlParams = new URLSearchParams(window.location.search);
 const isSnacksMode = urlParams.get('snacks') === '1';
 let modItem = null;
 let modChoices = {};
+
+// Payouts, the opening float and the Sheets "already sent" markers are shared
+// across every device through Firebase. localStorage is only an offline cache.
+// Reading localStorage directly is what made payouts keyed in on the tablet
+// invisible to the phone when sending the WhatsApp report.
+let payoutStore = ls("payouts_nie", []);
+let payoutsSent = ls("payouts_sent_nie", []);
+let floatStore  = parseFloat(ls("float_nie", 0)) || 0;
+function getPayouts(){ return payoutStore; }
 let pendingOrder = null;
 let diningOption = null; // null = not yet selected
 
@@ -920,6 +939,17 @@ function handleAdd(id){
     toast("⚠️ Please order a main item first!", "#C4572A");
     return;
   }
+
+  // Already in the cart — just bump the quantity and keep the sides the
+  // customer already picked. Ordering 3 chicken chops is now 3 taps instead
+  // of walking through the options popup 3 times.
+  const existing = cart.filter(x=>x.id===id);
+  if(existing.length){
+    existing[existing.length-1].qty++;
+    renderMenu();
+    return;
+  }
+
   if(item.modifiers && item.modifiers.length>0){
     // Filter modifiers based on admin toggles
     const sideOn = ls("mod_side_nie", true);
@@ -971,21 +1001,30 @@ function removeFromCart(cartKey){
   renderMenu();
 }
 
+// Categories served in a box. These get the 30c takeaway packaging charge
+// and count as a "main" for add-on gating.
+// c1 Shawarma · c2 Chicken Mains · c3 Fish Mains · c4 Spaghetti · c6 Breakfast
+const MAIN_CATEGORIES = ["c1","c2","c3","c4","c6"];
+
+// Snacks (c5) that are still served in a box, so they get the 30c packaging
+// charge and count as a "main" for add-on gating.
+const BOXED_SNACKS = ["sn0", "sn13"];   // Cheese Fries, Fries
+
 function isMain(id){
-  // Cheesy Fries also gets takeaway charge
-  if(id==="sn10") return true;
-  // Find which category this item belongs to
+  if(BOXED_SNACKS.indexOf(id) !== -1) return true;
   for(const cat of menu){
-    if(cat.id==="c1"||cat.id==="c2"||cat.id==="c3"||cat.id==="c4"){ // Shawarma, Chicken Mains, Fish Mains, Spaghetti
-      if(cat.items.find(i=>i.id===id)) return true;
-    }
+    if(MAIN_CATEGORIES.indexOf(cat.id) === -1) continue;
+    if(cat.items.find(i=>i.id===id)) return true;
   }
   return false;
 }
 
+// An order goes to the kitchen unless every item is a ready-to-serve c5 snack.
+// Written as an exclusion so any new category is included automatically —
+// the old version listed the kitchen categories and silently dropped
+// breakfast-only orders.
 function orderNeedsKitchen(){
-  // Goes to kitchen if cart has any main OR any add-on item
-  return cart.some(x=>isMain(x.id) || isAddon(x.id));
+  return cart.some(x => !isSnackOnly(x.id));
 }
 
 function isSnacksOnly(){
@@ -1597,14 +1636,9 @@ function updateKitchenBadge(){
 }
 
 function renderKitchen(){
-  const snackIds = ["sn1","sn2","sn7","sn8","sn9","sn10","sn15","sn16"];
-  const needsKitchenCheck = o => {
-    if(o.needsKitchen === false) return false;
-    if(o.needsKitchen === true) return true;
-    // Check if any item needs kitchen (including Cheese Fries sn0)
-    const kitchenItems = ["sn0","sn13"]; // snack items that need cooking
-    return o.items.some(i=> !snackIds.includes(i.id) || kitchenItems.includes(i.id));
-  };
+  // Only orders explicitly flagged as no-kitchen are hidden. Older orders saved
+  // without the flag default to visible — fail safe rather than silently vanish.
+  const needsKitchenCheck = o => o.needsKitchen !== false;
   const queue = orders.filter(o=>o.status!=="collected" && (needsKitchenCheck(o)||o.status==="cancelled")).sort((a,b)=>a.createdAt-b.createdAt);
   const tags  = document.getElementById("kitchen-tags");
   const n1 = orders.filter(o=>o.status==="paid").length;
@@ -1630,7 +1664,7 @@ function renderKitchen(){
         <div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${isTakeAway?"#B45309":st.color};line-height:1">${fmtQ(order.queueNo)}</div>
-            ${order.paymentMethod==="cash"?`<div style="background:#EFF6FF;color:#1E40AF;border-radius:8px;padding:4px 12px;font-size:13px;font-weight:700">💵 CASH</div>`:""}
+            ${order.paymentMethod==="cash"?`<div style="background:#DC2626;color:#fff;border-radius:10px;padding:7px 16px;font-size:20px;font-weight:900;letter-spacing:0.02em;box-shadow:0 2px 8px rgba(220,38,38,0.35)">💵 CASH ${fmtS(order.total)}</div>`:""}
           </div>
           <div style="font-size:11px;color:#78716C;margin-top:4px">${tme(order.createdAt)}</div>
           ${isTakeAway
@@ -1664,10 +1698,15 @@ function renderKitchen(){
         <button onclick="printTicket(orders.find(x=>x.id==='${order.id}'))" style="padding:11px 20px;font-size:22px;background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:9px">🖨️</button>
         ${order.status!=="cancelled"?`<button onclick="confirmCancelOrder('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:9px">✕ Cancel</button>`:""}
       </div>
-      <div style="padding:8px 14px;background:#FEF2F2;border-top:1px solid #FECACA;display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px">🧾</span>
-        <span style="font-size:13px;color:#991B1B;font-weight:600">Check PayNow confirmation before serving</span>
-      </div>
+      ${order.paymentMethod==="cash"
+        ? `<div style="padding:10px 14px;background:#DC2626;border-top:1px solid #B91C1C;display:flex;align-items:center;gap:8px">
+             <span style="font-size:18px">💵</span>
+             <span style="font-size:16px;color:#fff;font-weight:800">COLLECT ${fmtS(order.total)} CASH before serving</span>
+           </div>`
+        : `<div style="padding:8px 14px;background:#FEF2F2;border-top:1px solid #FECACA;display:flex;align-items:center;gap:8px">
+             <span style="font-size:16px">🧾</span>
+             <span style="font-size:13px;color:#991B1B;font-weight:600">Check PayNow confirmation before serving</span>
+           </div>`}
     </div>`;
   }).join("");
 }
@@ -1777,9 +1816,9 @@ function renderReports(){
   const allCash       = orders.filter(o=>o.paymentMethod==="cash").reduce((s,o)=>s+o.total,0);
 
   // Float and payouts
-  const float = parseFloat(ls("float_nie", 0)) || 0;
+  const float = floatStore;
   const todayDateStr = new Date().toISOString().slice(0,10);
-  const payouts = ls("payouts_nie",[]).filter(p=>p.date===todayDateStr);
+  const payouts = getPayouts().filter(p=>p.date===todayDateStr);
   const payoutTotal = payouts.reduce((s,p)=>s+p.amount,0);
   const cashInBox = float + todayCash - payoutTotal;
 
@@ -2190,7 +2229,9 @@ function stopTrackingOrder(){
 }
 
 function saveFloat(val){
-  lss("float_nie", parseFloat(val)||0);
+  floatStore = parseFloat(val) || 0;
+  lss("float_nie", floatStore);
+  db.ref("float").set(floatStore);   // share with every device
   renderReports();
 }
 
@@ -2238,9 +2279,9 @@ function doSaveDailyToSheets(dayKey){
   }));
   const topItems = Object.entries(itemMap).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,q])=>n+" x"+q);
 
-  const float2 = parseFloat(ls("float_nie",0))||0;
+  const float2 = floatStore;
   const todayISO = new Date().toISOString().slice(0,10);
-  const payouts2 = ls("payouts_nie",[]).filter(p=>p.date===todayISO);
+  const payouts2 = getPayouts().filter(p=>p.date===todayISO);
   const payoutTotal2 = payouts2.reduce((s,p)=>s+p.amount,0);
   const cashInBox2 = float2 + todayCash - payoutTotal2;
 
@@ -2266,15 +2307,16 @@ function doSaveDailyToSheets(dayKey){
       try{ db.ref("archives/sheets_saved").child(dayKey).set({at: Date.now()}); }catch(e){}
 
       // Send only payouts not already sent — prevents re-sending on every save
-      const sent = ls("payouts_sent_nie", []);
-      const toSend = ls("payouts_nie",[]).filter(p=>p.date===dayKey && sent.indexOf(p.id)===-1);
+      const sent = payoutsSent;
+      const toSend = getPayouts().filter(p=>p.date===dayKey && sent.indexOf(p.id)===-1);
       if(toSend.length){
         const payoutPromises = toSend.map(p=>{
           const pd = {type:"payout", date:p.date, supplier:p.supplier, item:p.item, amount:p.amount, notes:p.notes||""};
           return fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(pd)});
         });
         return Promise.all(payoutPromises).then(()=>{
-          lss("payouts_sent_nie", sent.concat(toSend.map(p=>p.id)));
+          // Mark as sent in Firebase so another device won't send them again
+          toSend.forEach(p=>{ try{ db.ref("archives/payouts_sent/"+p.id).set(true); }catch(e){} });
         });
       }
     })
@@ -2328,7 +2370,7 @@ function sendWhatsApp(){
   msg += "─────────────────────\n";
 
   // Supplier Payouts
-  const todayPayouts = ls("payouts_nie",[]).filter(p=>p.date===new Date().toISOString().slice(0,10));
+  const todayPayouts = getPayouts().filter(p=>p.date===new Date().toISOString().slice(0,10));
   if(todayPayouts.length){
     const totalPayout = todayPayouts.reduce((s,p)=>s+p.amount,0);
     msg += "🧾 *Supplier Payouts:*\n";
@@ -2354,9 +2396,11 @@ function addPayout(){
   const notes    = document.getElementById("pay-notes").value.trim();
   if(!supplier||!item||!amount||!date){ alert("Please fill in all required fields."); return; }
   const payout = {id:"PAY-"+Date.now(), supplier, item, amount, date, notes, createdAt:Date.now()};
-  const payouts = ls("payouts_nie",[]);
-  payouts.push(payout);
-  lss("payouts_nie", payouts);
+  // Show it straight away, then share it with every device
+  payoutStore = payoutStore.concat([payout]);
+  lss("payouts_nie", payoutStore);
+  db.ref("payouts/" + payout.id).set(payout)
+    .catch(()=>toast("\u26a0\ufe0f Saved on this device only \u2014 check internet","#DC2626"));
   document.getElementById("pay-supplier").value="";
   document.getElementById("pay-item").value="";
   document.getElementById("pay-amount").value="";
@@ -2367,13 +2411,14 @@ function addPayout(){
 
 function deletePayout(id){
   if(!confirm("Delete this payout?")) return;
-  const payouts = ls("payouts_nie",[]).filter(p=>p.id!==id);
-  lss("payouts_nie", payouts);
+  payoutStore = payoutStore.filter(p=>p.id!==id);
+  lss("payouts_nie", payoutStore);
+  db.ref("payouts/" + id).remove();
   renderPayouts();
 }
 
 function renderPayouts(){
-  const payouts = ls("payouts_nie",[]).sort((a,b)=>b.createdAt-a.createdAt);
+  const payouts = getPayouts().slice().sort((a,b)=>b.createdAt-a.createdAt);
   const total   = payouts.reduce((s,p)=>s+p.amount,0);
   const el = document.getElementById("payout-total-display");
   const list = document.getElementById("payout-list");
@@ -2462,7 +2507,7 @@ function archiveMonth(){
     dailyMap[d].rev+=o.total; dailyMap[d].count++;
   });
 
-  const payouts = ls("payouts_nie",[]).filter(p=>{
+  const payouts = getPayouts().filter(p=>{
     return p.date && p.date.startsWith(monthKey);
   });
   const payoutTotal = payouts.reduce((s,p)=>s+p.amount,0);
@@ -2869,7 +2914,9 @@ db.ref("stall_status").on("value", snap=>{
 });
 
 // Clear old Firebase availability if version changed
-const menuVersion = "nie_v5";
+// Bumped to nie_v6 — Onion Rings and Garden Salad have new ids, so any
+// availability flags saved against the old duplicate ids must be cleared.
+const menuVersion = "nie_v6";
 if(ls("last_menu_version","") !== menuVersion){
   db.ref("availability").remove();
   lss("last_menu_version", menuVersion);
@@ -2886,6 +2933,29 @@ db.ref("availability").on("value", snap=>{
   });
   saveMenu();
   renderMenu();
+});
+
+// Keep payouts, float and sent-markers in step across tablet and phone
+db.ref("payouts").on("value", snap=>{
+  const data = snap.val();
+  payoutStore = data ? Object.values(data) : [];
+  lss("payouts_nie", payoutStore);
+  renderPayouts();
+  renderReports();
+});
+
+db.ref("float").on("value", snap=>{
+  const v = snap.val();
+  if(v === null || v === undefined) return;
+  floatStore = parseFloat(v) || 0;
+  lss("float_nie", floatStore);
+  renderReports();
+});
+
+db.ref("archives/payouts_sent").on("value", snap=>{
+  const data = snap.val();
+  payoutsSent = data ? Object.keys(data) : [];
+  lss("payouts_sent_nie", payoutsSent);
 });
 
 // Save order to Firebase
