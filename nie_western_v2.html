@@ -931,13 +931,16 @@ function specialItem(){
     for(const c of menu) for(const i of c.items) if(i.id===special.itemId) return i;
     return null;
   })() : null;
-  return {
+  const it = {
     id: SPECIAL_ID,
     name: special.name || (base ? base.name : "Today's Special"),
     desc: special.desc || (base ? base.desc : ""),
-    price: Number(special.price) || 0,
-    modifiers: base ? base.modifiers : undefined
+    price: Number(special.price) || 0
   };
+  // Firebase .set() throws on undefined values, which would leave the
+  // customer stuck on "Processing". Only attach modifiers if they exist.
+  if(base && base.modifiers && base.modifiers.length) it.modifiers = base.modifiers;
+  return it;
 }
 
 function specialLeft(){
@@ -1508,12 +1511,24 @@ function closePayment(){
 async function confirmPayment(paymentMethod='paynow'){
   if(!pendingOrder) return;
   // Paid — the reservation is now consumed, don't let closePayment refund it
+  const heldSpecial = reservedSpecialQty;
   reservedSpecialQty = 0;
   // Show loading state
   const btn1 = document.querySelector("button[onclick=\"confirmPayment('paynow')\"]");
   const btn2 = document.querySelector("button[onclick=\"confirmPayment('cash')\"]");
   if(btn1){ btn1.textContent="⏳ Processing..."; btn1.disabled=true; }
   if(btn2){ btn2.textContent="⏳ Processing..."; btn2.disabled=true; }
+
+  // If anything below throws, the buttons must come back — a customer stuck
+  // on "Processing" after paying is the worst possible failure.
+  const unstick = (err)=>{
+    console.error("confirmPayment failed:", err);
+    if(heldSpecial > 0) releaseSpecial(heldSpecial);
+    if(btn1){ btn1.textContent="✅ I Have Paid — Get Queue Number"; btn1.disabled=false; }
+    if(btn2){ btn2.textContent="💵 Pay by Cash at Counter"; btn2.disabled=false; }
+    toast("⚠️ Could not save the order — please try again", "#DC2626");
+  };
+  try{
 
   const needsKitchen = orderNeedsKitchen();
   const snacksOnly = !needsKitchen && isSnacksOnly();
@@ -1597,6 +1612,7 @@ async function confirmPayment(paymentMethod='paynow'){
   m.classList.remove("hidden"); m.style.display="flex";
   renderMenu();
   updateKitchenBadge();
+  }catch(err){ unstick(err); }
 }
 
 // ── ORDER RECOVERY ──────────────────────────────────────────────────────────
@@ -3230,7 +3246,10 @@ db.ref("archives/payouts_sent").on("value", snap=>{
 
 // Save order to Firebase
 function saveOrderToFB(order){
-  ordersRef.child(order.id).set(order);
+  // JSON round-trip drops any undefined property. Firebase .set() throws on
+  // them, and a throw here means the order never reaches the kitchen.
+  const clean = JSON.parse(JSON.stringify(order));
+  return ordersRef.child(order.id).set(clean);
 }
 
 // Update order status in Firebase
