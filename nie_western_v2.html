@@ -1934,9 +1934,15 @@ function renderSpecialAdmin(){
 
   return `
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">
-      <div style="background:#C4572A;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="background:#C4572A;padding:12px 16px">
         <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700;color:#fff">⭐ Today's Special</div>
-        <div id="sp-left" style="font-size:12px;font-weight:700;color:#fff">${running ? ("Live — " + left + " left of " + (s.qtyTotal||0)) : "Not running"}</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;background:${running?"#F0FDF4":"#FEF2F2"};border-bottom:1px solid #E5E0D8">
+        <div>
+          <div id="sp-state" style="font-size:13px;font-weight:700;color:${running?"#16A34A":"#DC2626"}">${running?"🟢 Special is ON":"🔴 Special is OFF"}</div>
+          <div id="sp-left" style="font-size:11px;color:#78716C;margin-top:2px">${running ? (left + " left of " + (s.qtyTotal||0)) : (s.name ? ("Saved: " + s.name) : "Nothing set up yet")}</div>
+        </div>
+        <button onclick="toggleSpecial()" style="background:${running?"#DC2626":"#16A34A"};color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;white-space:nowrap">${running?"🔴 Turn OFF":"🟢 Turn ON"}</button>
       </div>
       <div style="padding:16px">
         <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Type</div>
@@ -1973,8 +1979,7 @@ function renderSpecialAdmin(){
           Saving again resets the count — use it to top up if you cook more.
         </div>
 
-        <button onclick="saveSpecial()" style="width:100%;padding:13px;background:#C4572A;color:#fff;border-radius:10px;font-size:14px;font-weight:700;margin-bottom:8px">⭐ Save &amp; Make It Live</button>
-        ${running?`<button onclick="stopSpecial()" style="width:100%;padding:11px;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:10px;font-size:13px;font-weight:600">Turn Off Special</button>`:""}
+        <button onclick="saveSpecial()" style="width:100%;padding:13px;background:#C4572A;color:#fff;border-radius:10px;font-size:14px;font-weight:700">⭐ Save &amp; Make It Live</button>
       </div>
     </div>`;
 }
@@ -2016,10 +2021,27 @@ function saveSpecial(){
     .catch(()=>toast("❌ Could not save — check internet", "#DC2626"));
 }
 
-function stopSpecial(){
-  if(!confirm("Turn off Today's Special?")) return;
-  db.ref("special").update({active:false})
-    .then(()=>{ toast("Special turned off", "#78716C"); renderAdminMenu(); });
+// One button flips the special on and off without touching the quantity,
+// so you can pause it over a quiet hour and switch it straight back on.
+function toggleSpecial(){
+  const s = special || {};
+  if(s.active){
+    db.ref("special").update({active:false})
+      .then(()=>{ toast("⭐ Special turned OFF", "#78716C"); renderAdminMenu(); })
+      .catch(e=>showError("Special", e));
+    return;
+  }
+  if(!s.name || !(Number(s.price) > 0)){
+    alert("Set it up first — fill in the details below, then tap Save & Make It Live.");
+    return;
+  }
+  if((Number(s.qtyLeft) || 0) <= 0){
+    alert("Sold out. Enter a new quantity below and tap Save & Make It Live to restock.");
+    return;
+  }
+  db.ref("special").update({active:true})
+    .then(()=>{ toast("⭐ Special is back ON — " + s.qtyLeft + " left"); renderAdminMenu(); })
+    .catch(e=>showError("Special", e));
 }
 
 function renderAdminMenu(){
@@ -3235,11 +3257,17 @@ db.ref("special").on("value", snap=>{
   special = snap.val();
   renderSpecial();
   // Update the admin readout without re-rendering the form and wiping typing
+  const on = !!(special && special.active);
   const l = document.getElementById("sp-left");
   if(l){
-    l.textContent = (special && special.active)
-      ? ("Live — " + (Number(special.qtyLeft)||0) + " left of " + (special.qtyTotal||0))
-      : "Not running";
+    l.textContent = on
+      ? ((Number(special.qtyLeft)||0) + " left of " + (special.qtyTotal||0))
+      : (special && special.name ? ("Saved: " + special.name) : "Nothing set up yet");
+  }
+  const st = document.getElementById("sp-state");
+  if(st){
+    st.textContent = on ? "🟢 Special is ON" : "🔴 Special is OFF";
+    st.style.color = on ? "#16A34A" : "#DC2626";
   }
 });
 
