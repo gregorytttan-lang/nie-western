@@ -597,6 +597,16 @@ function toast(msg, color){
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), 3000);
 }
+// Show real errors on screen. A silent failure on a stall tablet is
+// impossible to diagnose — this makes the browser tell us what broke.
+function showError(where, e){
+  const msg = (e && (e.message || e.code)) ? (e.message || e.code) : String(e);
+  try{ toast("⚠️ " + where + ": " + msg, "#DC2626"); }catch(_){}
+  console.error(where, e);
+}
+window.addEventListener("error", ev=>showError("Error", ev.error || ev.message));
+window.addEventListener("unhandledrejection", ev=>showError("Failed", ev.reason));
+
 const uid   = () => "ORD-" + Math.random().toString(36).substr(2,5).toUpperCase();
 const today = () => new Date().toDateString();
 const tme   = ts => new Date(ts).toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"});
@@ -1435,7 +1445,7 @@ async function proceedToPayment(){
   // that has already gone to someone else.
   const spLine = cart.find(x=>x.id===SPECIAL_ID);
   if(spLine){
-    const granted = await reserveSpecial(spLine.qty);
+    const granted = await reserveSpecial(spLine.qty).catch(e=>{ showError("Special", e); return 0; });
     if(granted <= 0){
       cart = cart.filter(x=>x.id!==SPECIAL_ID);
       toast("😔 Today's Special just sold out — removed from your order", "#DC2626");
@@ -1508,8 +1518,15 @@ function closePayment(){
   if(bc){ bc.textContent="💵 Pay by Cash at Counter"; bc.disabled=false; bc.style.opacity="1"; bc.style.background="#2563EB"; }
 }
 
+function resetPayButtons(){
+  const bp = document.getElementById("btn-paynow");
+  const bc = document.getElementById("btn-cash");
+  if(bp){ bp.textContent="✅ I Have Paid — Get Queue Number"; bp.disabled=false; bp.style.opacity="1"; }
+  if(bc){ bc.textContent="💵 Pay by Cash at Counter";        bc.disabled=false; bc.style.opacity="1"; }
+}
+
 async function confirmPayment(paymentMethod='paynow'){
-  if(!pendingOrder) return;
+  if(!pendingOrder){ resetPayButtons(); return; }   // never leave them stuck
   // Paid — the reservation is now consumed, don't let closePayment refund it
   const heldSpecial = reservedSpecialQty;
   reservedSpecialQty = 0;
@@ -1521,13 +1538,17 @@ async function confirmPayment(paymentMethod='paynow'){
 
   // If anything below throws, the buttons must come back — a customer stuck
   // on "Processing" after paying is the worst possible failure.
+  let finished = false;
   const unstick = (err)=>{
-    console.error("confirmPayment failed:", err);
+    if(finished) return;
+    finished = true;
+    clearTimeout(watchdog);
+    showError("Order failed", err);
     if(heldSpecial > 0) releaseSpecial(heldSpecial);
-    if(btn1){ btn1.textContent="✅ I Have Paid — Get Queue Number"; btn1.disabled=false; }
-    if(btn2){ btn2.textContent="💵 Pay by Cash at Counter"; btn2.disabled=false; }
-    toast("⚠️ Could not save the order — please try again", "#DC2626");
+    resetPayButtons();
   };
+  // Hard stop: whatever happens, the customer is never left on "Processing"
+  const watchdog = setTimeout(()=>unstick(new Error("timed out after 15s")), 15000);
   try{
 
   const needsKitchen = orderNeedsKitchen();
@@ -1612,6 +1633,7 @@ async function confirmPayment(paymentMethod='paynow'){
   m.classList.remove("hidden"); m.style.display="flex";
   renderMenu();
   updateKitchenBadge();
+  finished = true; clearTimeout(watchdog);
   }catch(err){ unstick(err); }
 }
 
