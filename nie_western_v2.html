@@ -1850,6 +1850,38 @@ function cancelOrder(orderId){
   toast("❌ Order #" + fmtQ(order.queueNo) + " cancelled", "#DC2626");
 }
 
+// Cash collection tracking — so nothing is served without the money taken
+function markCashPaid(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  o.cashCollected = true; o.cashCollectedAt = Date.now();
+  ordersRef.child(id).update({cashCollected:true, cashCollectedAt:Date.now()})
+    .catch(e=>showError("Mark paid", e));
+  renderKitchen();
+  toast("✅ Cash collected for " + fmtQ(o.queueNo) + " — " + fmtS(o.total));
+}
+
+function undoCashPaid(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  if(!confirm("Mark " + fmtQ(o.queueNo) + " as NOT paid again?")) return;
+  o.cashCollected = false;
+  ordersRef.child(id).update({cashCollected:false, cashCollectedAt:null})
+    .catch(e=>showError("Undo paid", e));
+  renderKitchen();
+}
+
+// Stop food leaving the counter on an unpaid cash order by accident
+function confirmCollected(id){
+  const o = orders.find(x=>x.id===id);
+  if(o && o.paymentMethod === "cash" && !o.cashCollected){
+    if(!confirm("\u26a0\ufe0f CASH NOT COLLECTED\n\n" + fmtQ(o.queueNo) + " owes " + fmtS(o.total)
+      + ".\n\nHave you taken the money?\n\nOK = yes, mark paid and collected.")) return;
+    markCashPaid(id);
+  }
+  updOrder(id, "collected");
+}
+
 function updateKitchenBadge(){
   const n = orders.filter(o=>(o.status==="paid"||o.status==="preparing") && o.needsKitchen!==false).length;
   const b = document.getElementById("kitchen-badge");
@@ -1870,6 +1902,13 @@ function renderKitchen(){
     n1>0?`<span style="background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;text-transform:uppercase">${n1} Queue</span>`:"",
     n2>0?`<span style="background:#F5F3FF;color:#7C3AED;border:1px solid #DDD6FE;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;text-transform:uppercase">${n2} Preparing</span>`:"",
     nC>0?`<span style="background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:20px;padding:3px 12px;font-size:11px;font-weight:700;text-transform:uppercase">${nC} Cancelled</span>`:"",
+    (function(){
+      const un = orders.filter(o=>o.paymentMethod==="cash" && !o.cashCollected
+        && o.status!=="collected" && o.status!=="cancelled");
+      if(!un.length) return "";
+      const owed = un.reduce((s,o)=>s+o.total,0);
+      return `<span style="background:#DC2626;color:#fff;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:800;text-transform:uppercase">💵 ${un.length} unpaid · ${fmtS(owed)}</span>`;
+    })(),
   ].join("");
   if(!queue.length){
     document.getElementById("kitchen-orders").innerHTML=`<div style="text-align:center;padding:80px 20px;color:#78716C;grid-column:1/-1"><div style="font-size:48px;margin-bottom:16px">✅</div><div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:#1C1917;margin-bottom:6px">All Clear!</div><div style="font-size:13px">No pending orders</div></div>`;
@@ -1886,7 +1925,11 @@ function renderKitchen(){
         <div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${isTakeAway?"#B45309":st.color};line-height:1">${fmtQ(order.queueNo)}</div>
-            ${order.paymentMethod==="cash"?`<div style="background:#DC2626;color:#fff;border-radius:10px;padding:7px 16px;font-size:20px;font-weight:900;letter-spacing:0.02em;box-shadow:0 2px 8px rgba(220,38,38,0.35)">💵 CASH ${fmtS(order.total)}</div>`:""}
+            ${order.paymentMethod==="cash"
+              ? (order.cashCollected
+                  ? `<div style="background:#16A34A;color:#fff;border-radius:10px;padding:7px 16px;font-size:20px;font-weight:900">✅ PAID ${fmtS(order.total)}</div>`
+                  : `<div style="background:#DC2626;color:#fff;border-radius:10px;padding:7px 16px;font-size:20px;font-weight:900;box-shadow:0 2px 8px rgba(220,38,38,0.35)">💵 CASH ${fmtS(order.total)}</div>`)
+              : ""}
           </div>
           <div style="font-size:11px;color:#78716C;margin-top:4px">${tme(order.createdAt)}</div>
           ${isTakeAway
@@ -1915,18 +1958,28 @@ function renderKitchen(){
         }).join("")}
       </div>
       <div style="padding:0 14px 12px;display:flex;gap:8px;flex-wrap:wrap">
+        ${order.paymentMethod==="cash"&&order.status!=="cancelled"
+          ? (order.cashCollected
+              ? `<button onclick="undoCashPaid('${order.id}')" style="flex:1;padding:11px;font-size:13px;font-weight:700;background:#F0FDF4;color:#166534;border:1px solid #86EFAC;border-radius:9px">✅ Paid — tap to undo</button>`
+              : `<button onclick="markCashPaid('${order.id}')" style="flex:1 1 100%;padding:14px;font-size:17px;font-weight:900;background:#16A34A;color:#fff;border-radius:9px;box-shadow:0 2px 8px rgba(22,163,74,0.35)">💵 Mark Cash Paid — ${fmtS(order.total)}</button>`)
+          : ""}
         ${order.status!=="ready"&&order.status!=="collected"?`<button onclick="markReady('${order.id}',${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#16A34A;color:#fff;border-radius:9px">🔔 Call Customer</button>`:""}
         ${order.status==="ready"?`<button onclick="recallOrder('${order.id}',${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#2563EB;color:#fff;border-radius:9px">🔁 Re-call</button>`:""}
-        ${order.status==="ready"?`<button onclick="updOrder('${order.id}','collected')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#78716C;color:#fff;border-radius:9px">✓ Collected</button>`:""}
+        ${order.status==="ready"?`<button onclick="confirmCollected('${order.id}')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#78716C;color:#fff;border-radius:9px">✓ Collected</button>`:""}
         <button onclick="openReply('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:${order.staffReply?"#EFF6FF":"#F5F3F0"};color:${order.staffReply?"#1E40AF":"#1C1917"};border:1px solid ${order.staffReply?"#93C5FD":"#E5E0D8"};border-radius:9px">💬 Reply</button>
         <button onclick="printTicket(orders.find(x=>x.id==='${order.id}'))" style="padding:11px 20px;font-size:22px;background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:9px">🖨️</button>
         ${order.status!=="cancelled"?`<button onclick="confirmCancelOrder('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:9px">✕ Cancel</button>`:""}
       </div>
       ${order.paymentMethod==="cash"
-        ? `<div style="padding:10px 14px;background:#DC2626;border-top:1px solid #B91C1C;display:flex;align-items:center;gap:8px">
-             <span style="font-size:18px">💵</span>
-             <span style="font-size:16px;color:#fff;font-weight:800">COLLECT ${fmtS(order.total)} CASH before serving</span>
-           </div>`
+        ? (order.cashCollected
+          ? `<div style="padding:10px 14px;background:#F0FDF4;border-top:1px solid #86EFAC;display:flex;align-items:center;gap:8px">
+               <span style="font-size:18px">✅</span>
+               <span style="font-size:15px;color:#166534;font-weight:800">Cash collected — ${fmtS(order.total)}</span>
+             </div>`
+          : `<div style="padding:10px 14px;background:#DC2626;border-top:1px solid #B91C1C;display:flex;align-items:center;gap:8px">
+               <span style="font-size:18px">💵</span>
+               <span style="font-size:16px;color:#fff;font-weight:800">COLLECT ${fmtS(order.total)} CASH before serving</span>
+             </div>`)
         : `<div style="padding:8px 14px;background:#FEF2F2;border-top:1px solid #FECACA;display:flex;align-items:center;gap:8px">
              <span style="font-size:16px">🧾</span>
              <span style="font-size:13px;color:#991B1B;font-weight:600">Check PayNow confirmation before serving</span>
