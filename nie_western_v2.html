@@ -993,6 +993,7 @@ function specialItem(){
   // Firebase .set() throws on undefined values, which would leave the
   // customer stuck on "Processing". Only attach modifiers if they exist.
   if(base && base.modifiers && base.modifiers.length) it.modifiers = base.modifiers;
+  if(base) it.baseId = base.id;   // so the chef's protein count still sees it
   return it;
 }
 
@@ -1016,6 +1017,61 @@ function isSnackOnly(id){
   if(!item) return false;
   // Items with needsKitchen:true are NOT snack-only (they need kitchen display)
   return item.needsKitchen !== true;
+}
+
+// ── CHEF'S PROTEIN COUNT ─────────────────────────────────────────────────────
+// Which raw items each dish uses, so the chef can thaw the right amount.
+// One dish = one piece. Add-ons count as a piece too.
+// To include another dish later, add its id to the right line.
+const PROTEIN_MAP = {
+  "Chicken Chop":     ["m3","m4","m12","a2"],          // Hawaiian, Mexican, plain, add-on
+  "Chicken Cutlet":   ["m5","m14","a3"],               // Mexican, plain, add-on
+  "Black Pepper / Mushroom Chicken": ["m10","m11"],
+  "Grilled Fish":     ["f1","f2","f4","f5","f6","a1"]  // all grilled variants + add-on
+};
+
+function proteinTally(list){
+  const out = {};
+  Object.keys(PROTEIN_MAP).forEach(k=>{ out[k] = 0; });
+  (list||[]).forEach(o=>{
+    if(!o || o.status === "cancelled" || !o.items) return;
+    o.items.forEach(i=>{
+      const id = i.baseId || i.id;          // baseId covers Today's Special
+      for(const k in PROTEIN_MAP){
+        if(PROTEIN_MAP[k].indexOf(id) !== -1) out[k] += (Number(i.qty) || 0);
+      }
+    });
+  });
+  return out;
+}
+
+function todaysOrdersForChef(){
+  const t = today();
+  return orders.filter(o=>o && new Date(o.createdAt).toDateString() === t && o.status !== "cancelled");
+}
+
+function printChefSlip(){
+  const prot = proteinTally(todaysOrdersForChef());
+  const ESC='\x1B', GS='\x1D', LF='\n';
+  const NORMAL=ESC+'!'+'\x00', BOLD_ON=ESC+'E'+'\x01', BOLD_OFF=ESC+'E'+'\x00';
+  const DOUBLE_H=ESC+'!'+'\x10', ALIGN_C=ESC+'a'+'\x01', ALIGN_L=ESC+'a'+'\x00';
+  const CUT=GS+'V'+'\x42'+'\x00';
+  let t = ESC+'t'+'\x00';
+  t += ALIGN_C + BOLD_ON + "NIE WESTERN FOOD" + LF + BOLD_OFF;
+  t += "KITCHEN COUNT" + LF;
+  t += new Date().toLocaleDateString("en-SG") + LF;
+  t += ALIGN_L + "------------------------------------------------" + LF;
+  let total = 0;
+  Object.keys(PROTEIN_MAP).forEach(k=>{
+    total += prot[k];
+    t += DOUBLE_H + BOLD_ON + k + LF + NORMAL + BOLD_OFF;
+    t += DOUBLE_H + BOLD_ON + "   " + prot[k] + " pcs" + LF + NORMAL + BOLD_OFF;
+    t += "------------------------------------------------" + LF;
+  });
+  t += DOUBLE_H + BOLD_ON + "TOTAL: " + total + " pcs" + LF + NORMAL + BOLD_OFF;
+  t += "================================================" + LF + LF + CUT;
+  rawbtPrint(t);
+  toast("🖨️ Printing kitchen count...", "#C4572A");
 }
 
 function cartHasMain(){
@@ -2407,6 +2463,9 @@ function renderReports(){
   }));
   const todayTop = Object.entries(todayItemMap).sort((a,b)=>b[1].qty-a[1].qty);
 
+  // Pieces of each protein used today — what the chef asks for at close
+  const prot = proteinTally(todayOrders);
+
   document.getElementById("admin-reports").innerHTML = `
     <!-- Summary cards -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
@@ -2487,6 +2546,24 @@ function renderReports(){
             </div>
           </div>`).join("")}
       `}
+    </div>
+
+    <!-- Chef's protein count -->
+    <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">🍗 Kitchen Count — Today</div>
+        <button onclick="printChefSlip()" style="background:#C4572A;color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer">🖨️ Print for Chef</button>
+      </div>
+      <div style="font-size:12px;color:#78716C;margin-bottom:12px">Pieces used today, counted across every dish and add-on.</div>
+      ${Object.keys(PROTEIN_MAP).map((k,i)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:${i>0?"1px solid #E5E0D8":"none"}">
+          <span style="font-size:14px;font-weight:600;color:#1C1917">${k}</span>
+          <span style="font-family:'Playfair Display',serif;font-size:20px;font-weight:800;color:#C4572A">${prot[k]} pcs</span>
+        </div>`).join("")}
+      <div style="border-top:2px solid #E5E0D8;margin-top:8px;padding-top:10px;display:flex;justify-content:space-between">
+        <span style="font-size:13px;font-weight:700;color:#78716C">Total</span>
+        <span style="font-family:'Playfair Display',serif;font-size:20px;font-weight:800;color:#1C1917">${Object.keys(PROTEIN_MAP).reduce((s,k)=>s+prot[k],0)} pcs</span>
+      </div>
     </div>
 
     <!-- Daily History -->
@@ -2939,6 +3016,14 @@ function sendWhatsApp(){
       msg += "  • " + p.supplier + " — *" + fmtS(p.amount) + "*\n";
     });
     msg += "💸 Total Payouts: *" + fmtS(totalPayout) + "*\n";
+    msg += "─────────────────────\n";
+  }
+
+  const prot = proteinTally(todayOrders);
+  const protTotal = Object.keys(PROTEIN_MAP).reduce((s,k)=>s+prot[k],0);
+  if(protTotal > 0){
+    msg += "🍗 *Kitchen Count (pcs):*\n";
+    Object.keys(PROTEIN_MAP).forEach(k=>{ if(prot[k] > 0) msg += "  • " + k + ": *" + prot[k] + "*\n"; });
     msg += "─────────────────────\n";
   }
 
