@@ -122,6 +122,10 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <span style="font-size:18px;color:#92400E;">›</span>
     </div>
   </div>
+  <!-- Find my order (works even if the phone lost the saved order) -->
+  <div style="margin:8px 12px 0">
+    <button onclick="openFindOrder()" style="width:100%;background:#fff;border:1.5px dashed #D4CFC8;border-radius:14px;padding:12px;font-size:13px;font-weight:600;color:#78716C">🔎 Already ordered? Find my order</button>
+  </div>
   <!-- Items list -->
   <div id="items-list" style="padding-bottom:100px"></div>
   <!-- Cart FAB -->
@@ -214,6 +218,22 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <div style="font-size:12px;color:#78716C;margin-bottom:20px;">Tap an order to see its status</div>
     <div id="recovery-list"></div>
     <button onclick="closeRecoveryModal()" style="width:100%;padding:14px;background:#F5F3F0;color:#78716C;border:none;border-radius:12px;font-size:14px;font-weight:600;margin-top:12px;">Close</button>
+  </div>
+</div>
+
+<!-- Find My Order Modal -->
+<div id="find-modal" class="hidden overlay" style="background:rgba(28,25,23,0.6);display:flex;align-items:flex-end">
+  <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:88vh;overflow-y:auto;padding:24px">
+    <div style="width:40px;height:4px;background:#E5E0D8;border-radius:2px;margin:0 auto 20px"></div>
+    <div class="serif" style="font-size:20px;font-weight:700;margin-bottom:4px">🔎 Find My Order</div>
+    <div style="font-size:13px;color:#78716C;margin-bottom:20px;line-height:1.5">Enter your queue number and the exact amount you paid, and we will bring your order back up.</div>
+    <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Queue number</div>
+    <input id="find-q" type="number" inputmode="numeric" placeholder="e.g. 45" style="width:100%;padding:14px;border:1.5px solid #E5E0D8;border-radius:12px;font-size:17px;font-weight:700;margin-bottom:14px;text-align:center">
+    <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Amount you paid ($)</div>
+    <input id="find-amt" type="number" step="0.01" inputmode="decimal" placeholder="e.g. 4.30" style="width:100%;padding:14px;border:1.5px solid #E5E0D8;border-radius:12px;font-size:17px;font-weight:700;margin-bottom:8px;text-align:center">
+    <div id="find-error" style="font-size:13px;color:#DC2626;font-weight:600;min-height:20px;margin-bottom:10px;line-height:1.4"></div>
+    <button onclick="doFindOrder()" style="width:100%;padding:15px;background:#C4572A;color:#fff;border-radius:12px;font-size:15px;font-weight:700">Find My Order</button>
+    <button onclick="closeFindOrder()" style="width:100%;padding:11px;background:#F5F3F0;color:#78716C;border-radius:12px;font-size:13px;margin-top:8px">Cancel</button>
   </div>
 </div>
 
@@ -1755,6 +1775,58 @@ function reopenQueueForOrder(orderId){
     const m = document.getElementById("queue-modal");
     m.classList.remove("hidden"); m.style.display="flex";
   });
+}
+
+// Look an order back up from Firebase. Needed because most customers return
+// by re-scanning the QR, and many QR scanner apps open a throwaway browser
+// that loses the saved order. The amount paid acts as the proof it is theirs.
+let findAttempts = 0;
+
+function openFindOrder(){
+  document.getElementById("find-q").value = "";
+  document.getElementById("find-amt").value = "";
+  document.getElementById("find-error").textContent = "";
+  const m = document.getElementById("find-modal");
+  m.classList.remove("hidden"); m.style.display = "flex";
+}
+
+function closeFindOrder(){
+  const m = document.getElementById("find-modal");
+  m.classList.add("hidden"); m.style.display = "none";
+}
+
+function doFindOrder(){
+  const err = document.getElementById("find-error");
+  const q   = parseInt(document.getElementById("find-q").value, 10);
+  const amt = parseFloat(document.getElementById("find-amt").value);
+  if(!(q > 0) || !(amt >= 0)){
+    err.textContent = "Please fill in both your queue number and the amount you paid.";
+    return;
+  }
+  if(findAttempts >= 6){
+    err.textContent = "Too many tries. Please show your payment confirmation to our staff at the counter.";
+    return;
+  }
+  if(!orders.length){
+    err.textContent = "Still loading — please wait a moment and try again.";
+    return;
+  }
+  const t = today();
+  const match = orders.find(o=>
+    o && o.queueNo === q
+    && o.status !== "cancelled"
+    && new Date(o.createdAt).toDateString() === t
+    && Math.abs(Number(o.total) - amt) < 0.005
+  );
+  if(!match){
+    findAttempts++;
+    err.textContent = "No matching order. Check the queue number and the exact amount \u2014 or ask our staff at the counter.";
+    return;
+  }
+  findAttempts = 0;
+  closeFindOrder();
+  saveActiveOrder(match);        // remember it again on this device
+  reopenQueueForOrder(match.id);
 }
 
 function closeQueue(){
