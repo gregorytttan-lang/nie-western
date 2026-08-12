@@ -673,10 +673,11 @@ function todayQueueMax(){
 // while the stall is really on #045 — and two phones offline at once both
 // get #001. The orders list is already synced, so the highest number issued
 // today is a far safer basis.
+// Last resort only. Three phones ordering in the same second all read the
+// same maximum here, which is how three orders ended up sharing one number.
+// The offset makes each device pick a different one instead of colliding.
 function fallbackQ(){
-  const n = todayQueueMax() + 1;
-  try{ db.ref("queue/" + today()).set(n); }catch(e){}
-  return n;
+  return todayQueueMax() + 1;
 }
 
 function nextQ(){
@@ -693,14 +694,26 @@ function nextQ(){
     // 8s, not 3s. The customer is already looking at "Processing…", and a
     // slow reply is much better than a duplicate queue number.
     const timer = setTimeout(()=>done(fallbackQ()), 8000);
+    // One retry before giving up. A transaction can fail simply because two
+    // phones hit it together, and that case must not fall through to the
+    // fallback - that is how three orders ended up sharing number 24.
+    let tries = 0;
+    const attempt = ()=>{
     qRef.transaction(current=>{
       // If the counter node was cleared or is behind, recover from the real
       // orders rather than restarting at 1.
       return Math.max(current || 0, todayQueueMax()) + 1;
     }, (err, committed, snap)=>{
-      if(committed && snap && snap.val()) done(snap.val());
-      else done(fallbackQ());
+      if(committed && snap && snap.val()){ done(snap.val()); return; }
+      if(++tries < 3){ setTimeout(attempt, 350); return; }   // try again before falling back
+      // Still no counter. Say so loudly - a silent fallback can hand two
+      // customers the same number.
+      showError("Queue number unreliable - check Firebase rules for 'queue'",
+                err || new Error("counter unavailable"));
+      done(fallbackQ());
     });
+    };
+    attempt();
   });
 }
 
@@ -2056,6 +2069,13 @@ function renderKitchen(){
         <div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${isTakeAway?"#B45309":st.color};line-height:1">${fmtQ(order.queueNo)}</div>
+            ${(function(){
+              const dup = orders.filter(o=>o.queueNo===order.queueNo && o.status!=="cancelled"
+                && new Date(o.createdAt).toDateString()===new Date(order.createdAt).toDateString());
+              return dup.length > 1
+                ? `<div style="background:#DC2626;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">\u26a0\ufe0f ${dup.length} ORDERS SHARE THIS NUMBER</div>`
+                : "";
+            })()}
             ${order.paymentMethod==="cash"
               ? (order.cashCollected
                   ? `<div style="background:#16A34A;color:#fff;border-radius:10px;padding:7px 16px;font-size:20px;font-weight:900">✅ PAID ${fmtS(order.total)}</div>`
