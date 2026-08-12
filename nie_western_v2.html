@@ -2668,9 +2668,14 @@ function openAdminFromClosed(){
   }
 }
 
+// Open/closed comes from Firebase only. Each tablet used to apply its own
+// cached value on load, so a stale cache on one device could put the closed
+// screen back up after another device had opened the stall.
+let stallState = null;        // null = not heard from Firebase yet
+
 function renderStallStatus(){
-  const isOpen = ls("stall_open_nie", true);
-  const reopenDate = ls("stall_reopen_nie", "");
+  const isOpen = stallState ? !!stallState.open : ls("stall_open_nie", true);
+  const reopenDate = stallState ? (stallState.reopen || "") : ls("stall_reopen_nie", "");
   const bar = document.getElementById("stall-status-bar");
   if(!bar) return;
   bar.style.background = isOpen ? "#F0FDF4" : "#FEF2F2";
@@ -2682,9 +2687,9 @@ function renderStallStatus(){
     </div>
     <button onclick="toggleStall()" style="background:${isOpen?"#DC2626":"#16A34A"};color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;white-space:nowrap">${isOpen?"🔒 Close Stall":"🔓 Open Stall"}</button>`;
 
-  // Show/hide closed screen for customers
+  // Only ever show the closed screen on Firebase's word, never on a cache
   const cs = document.getElementById("closed-screen");
-  if(cs){ cs.classList.toggle("hidden", isOpen); }
+  if(cs){ cs.classList.toggle("hidden", stallState ? !!stallState.open : true); }
   if(!isOpen && reopenDate){
     const el = document.getElementById("reopen-msg");
     if(el) el.textContent = reopenDate;
@@ -2692,20 +2697,20 @@ function renderStallStatus(){
 }
 
 function toggleStall(){
-  const isOpen = ls("stall_open_nie", true);
+  // Use the live state, not this device's cache
+  const isOpen = stallState ? !!stallState.open : true;
   if(isOpen){
-    // Closing — ask for reopen date/time
     const msg = prompt("Enter reopening date & time (e.g. Tomorrow 14 April 2026 at 10:00 AM):", "Tomorrow at 10:00 AM");
     if(msg===null) return; // cancelled
-    lss("stall_reopen_nie", msg);
-    lss("stall_open_nie", false);
-    // Save to Firebase so all devices see closed screen
-    db.ref("stall_status").set({open: false, reopen: msg});
+    db.ref("stall_status").set({open:false, reopen:msg, at:Date.now()})
+      .then(()=>toast("\U0001f512 Stall CLOSED on all devices", "#DC2626"))
+      .catch(e=>showError("Could not close", e));
   } else {
-    lss("stall_open_nie", true);
-    db.ref("stall_status").set({open: true, reopen: ""});
+    db.ref("stall_status").set({open:true, reopen:"", at:Date.now()})
+      .then(()=>toast("\U0001f513 Stall OPEN on all devices", "#16A34A"))
+      .catch(e=>showError("Could not open", e));
   }
-  renderStallStatus();
+  // The listener repaints every device, including this one
 }
 
 // Listen for stall status changes from Firebase — moved to after db init below
@@ -3559,17 +3564,18 @@ const ordersRef = db.ref("orders");
 // Listen for stall status changes — syncs open/close to all devices
 db.ref("stall_status").on("value", snap=>{
   const data = snap.val();
-  if(!data) return;
-  lss("stall_open_nie", data.open);
-  lss("stall_reopen_nie", data.reopen||"");
+  // Nothing saved yet — treat the stall as open rather than locking customers out
+  stallState = data || {open:true, reopen:""};
+  lss("stall_open_nie", !!stallState.open);
+  lss("stall_reopen_nie", stallState.reopen || "");
   renderStallStatus();
   const cs = document.getElementById("closed-screen");
-  if(cs){ cs.classList.toggle("hidden", data.open); }
-  if(!data.open && data.reopen){
+  if(cs){ cs.classList.toggle("hidden", !!stallState.open); }
+  if(!stallState.open && stallState.reopen){
     const el = document.getElementById("reopen-msg");
-    if(el) el.textContent = data.reopen;
+    if(el) el.textContent = stallState.reopen;
   }
-});
+}, err=>showError("Stall status", err));
 
 // Clear old Firebase availability if version changed
 // Bumped to nie_v6 — Onion Rings and Garden Salad have new ids, so any
