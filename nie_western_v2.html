@@ -825,9 +825,12 @@ const DEFAULT_MENU = [
 // Clear ALL old cache versions - force fresh menu
 // Old cache keys auto-cleared on version change
 let menu    = ls(CONFIG.MENU_KEY, DEFAULT_MENU);
-// Reset all avail flags to true on load — Firebase will apply correct state
-// This ensures admin toggles always take effect even on cached phones
-menu.forEach(cat=>cat.items.forEach(item=>{ item.avail = true; }));
+// Keep whatever was last known until Firebase answers. Forcing everything to
+// true here meant a sold-out item flashed back on at every page load, and
+// stayed on if the availability read was slow or blocked.
+menu.forEach(cat=>cat.items.forEach(item=>{
+  if(item.avail === undefined) item.avail = true;
+}));
 let orders  = [];
 let cart    = [];
 let curCat  = 0;
@@ -852,7 +855,7 @@ function getPayouts(){ return payoutStore; }
 let pendingOrder = null;
 let diningOption = null; // null = not yet selected
 
-function saveMenu()  { lss("menu_nie_v6", menu); }
+function saveMenu()  { lss(CONFIG.MENU_KEY, menu); }   // was menu_nie_v6 while the app read v7
 function saveOrders(){ /* orders saved to Firebase */ }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
@@ -2399,12 +2402,21 @@ function toggleMod(mod){
 function toggleAvail(cid,iid){
   const cat=menu.find(c=>c.id===cid); if(!cat) return;
   const item=cat.items.find(i=>i.id===iid); if(!item) return;
-  item.avail = item.avail===false ? true : false;
+  const turningOff = item.avail !== false;   // currently on -> switch off
+  item.avail = turningOff ? false : true;
   saveMenu();
-  // Save to Firebase — false means OFF, true means ON
-  db.ref("availability/" + iid).set(item.avail===false ? false : true);
   renderAdminMenu();
   renderMenu();
+  // Firebase is the source of truth. If the write is rejected the item would
+  // silently switch itself back on, which is what made items "reopen".
+  db.ref("availability/" + iid).set(!turningOff)
+    .then(()=>{ toast(turningOff ? ("\u2713 " + item.name + " is now OFF") : ("\u2713 " + item.name + " is back ON"),
+                      turningOff ? "#78716C" : "#16A34A"); })
+    .catch(e=>{
+      item.avail = turningOff ? true : false;   // put it back, the change did not stick
+      saveMenu(); renderAdminMenu(); renderMenu();
+      showError("Could not save \u2014 item unchanged", e);
+    });
 }
 
 function updatePrice(cid,iid,p){
