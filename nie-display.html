@@ -96,26 +96,28 @@ body.board-mode .main{display:block!important;padding:0!important}
 body.board-mode .serving-zone{width:100%!important;padding:0!important}
 body.board-mode .serving-grid{display:block!important;height:100%!important}
 .board{width:100%;height:100%;display:flex;flex-direction:column;padding:.6vh 1.2vw;overflow:hidden}
-.board-hd{font-size:2.6vh;font-weight:900;color:#F5C542;letter-spacing:.03em;
+.board-hd{font-size:3.2vh;font-weight:900;color:#F5C542;letter-spacing:.03em;
   display:flex;align-items:center;gap:1.6vw;flex-shrink:0;padding-bottom:.4vh}
 .board-hint{font-size:1.3vh;font-weight:500;color:rgba(255,255,255,.3)}
 .wrap-note{display:flex;gap:1vw;padding:.3vh 0 .6vh;flex-shrink:0}
-.wrap-chip{font-size:1.7vh;font-weight:800;padding:.4vh 1vw;border-radius:.7vh}
+.wrap-chip{font-size:2.3vh;font-weight:800;padding:.7vh 1.3vw;border-radius:.7vh}
 .wrap-white{background:#fff;color:#1C1408}
 .wrap-brown{background:#8B5A2B;color:#fff}
 .board-cols{flex:1;display:grid;grid-template-columns:repeat(3,1fr);
-  gap:0 1.6vw;align-content:start;min-height:0}
-.cat-name{font-size:1.9vh;font-weight:800;color:#F5C542;letter-spacing:.08em;
-  margin:.2vh 0 .3vh;text-transform:uppercase;border-bottom:1px solid rgba(245,197,66,.25);padding-bottom:.2vh}
+  gap:0 1.8vw;align-content:stretch;min-height:0}
+.board-col{display:flex;flex-direction:column;min-height:0}
+.board-col .b-item{flex:1;min-height:0}
+.cat-name{font-size:2.8vh;font-weight:800;color:#F5C542;letter-spacing:.08em;
+  margin:.2vh 0 .6vh;flex-shrink:0;text-transform:uppercase;border-bottom:1px solid rgba(245,197,66,.25);padding-bottom:.2vh}
 .b-item{display:flex;justify-content:space-between;align-items:center;gap:.6vw;
-  padding:.42vh .5vw;border-radius:.6vh;cursor:pointer}
+  padding:.3vh .6vw;border-radius:.6vh;cursor:pointer}
 .b-item:active{background:rgba(255,255,255,.1)}
-.b-name{font-size:1.95vh;font-weight:600;color:#fff;line-height:1.15}
-.b-price{font-size:2vh;font-weight:800;color:#4ADE80;white-space:nowrap}
-.b-note{display:inline;font-size:1.35vh;font-weight:700;color:#F5C542;margin-left:.4vw}
+.b-name{font-size:3.5vh;font-weight:600;color:#fff;line-height:1.15}
+.b-price{font-size:3.6vh;font-weight:800;color:#4ADE80;white-space:nowrap}
+.b-note{display:inline;font-size:2vh;font-weight:700;color:#F5C542;margin-left:.4vw}
 .b-item.out .b-name{color:rgba(255,255,255,.25);text-decoration:line-through}
 .b-item.out .b-note{color:rgba(255,255,255,.2)}
-.b-item.out .b-price{color:#DC2626;font-size:1.4vh}
+.b-item.out .b-price{color:#DC2626;font-size:2.4vh}
 </style>
 </head>
 <body>
@@ -347,7 +349,7 @@ function boardHtml(){
         + '</div>'
         + '<div class="board-cols">';
   for(var c=0;c<BOARD.length;c++){
-    h += '<div><div class="cat-name">'+BOARD[c].c+'</div>';
+    h += '<div class="board-col"><div class="cat-name">'+BOARD[c].c+'</div>';
     for(var j=0;j<BOARD[c].i.length;j++){
       var it=BOARD[c].i[j], out=!!soldOut[it[0]];
       var note = it[3] ? '<span class="b-note">'+it[3]+'</span>' : '';
