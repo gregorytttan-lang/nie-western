@@ -87,6 +87,29 @@ body{background:#0A0908;font-family:'DM Sans',sans-serif;color:#FAF9F7;-webkit-u
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;grid-column:1/-1;height:100%;gap:16px;opacity:.35}
 .empty-icon{font-size:80px}
 .empty-txt{font-size:24px;color:#8A7A6E;font-weight:600;letter-spacing:.02em}
+
+/* -- menu board -- */
+.board{width:100%;height:100%;display:flex;flex-direction:column;padding:1vh 1.4vw;overflow:hidden}
+.board-hd{font-size:2.9vh;font-weight:900;color:#F5C542;letter-spacing:.04em;padding-bottom:.9vh;
+  border-bottom:2px solid rgba(245,197,66,.28);display:flex;align-items:baseline;gap:1.4vw;flex-shrink:0}
+.board-hint{font-size:1.5vh;font-weight:500;color:rgba(255,255,255,.35);letter-spacing:0}
+.board-cols{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:.7vh 1.4vw;
+  align-content:start;padding-top:1vh;overflow:hidden}
+.cat-name{font-size:1.95vh;font-weight:800;color:#F5C542;letter-spacing:.06em;
+  margin:.5vh 0;text-transform:uppercase}
+.b-item{display:flex;justify-content:space-between;align-items:baseline;gap:1vw;
+  padding:.62vh .8vw;border-radius:.8vh;cursor:pointer;transition:background .15s}
+.b-item:active{background:rgba(255,255,255,.10)}
+.b-name{font-size:2vh;font-weight:600;color:#fff;line-height:1.25}
+.b-price{font-size:2vh;font-weight:800;color:#4ADE80;white-space:nowrap}
+.b-item.out .b-name{color:rgba(255,255,255,.26);text-decoration:line-through}
+.b-item.out .b-price{color:#DC2626;font-size:1.5vh;letter-spacing:.06em}
+.b-note{display:block;font-size:1.35vh;font-weight:700;color:#F5C542;letter-spacing:.05em;margin-top:.1vh}
+.b-item.out .b-note{color:rgba(255,255,255,.22)}
+.wrap-note{display:flex;gap:1.2vw;padding:.9vh 0 .2vh;flex-wrap:wrap;flex-shrink:0}
+.wrap-chip{font-size:1.75vh;font-weight:800;padding:.55vh 1.1vw;border-radius:.8vh;letter-spacing:.03em}
+.wrap-white{background:#fff;color:#1C1408}
+.wrap-brown{background:#8B5A2B;color:#fff}
 </style>
 </head>
 <body>
@@ -282,10 +305,78 @@ setInterval(function(){ if(window.speechSynthesis&&!window.speechSynthesis.speak
 
 function fmtQ(n){ return String(n).padStart(3,'0'); }
 function getActive(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='serving'&&kv[1].queueNo!=null;}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_ACTIVE); }
+// -- MENU BOARD --------------------------------------------------------------
+// Shown whenever no number is being called. Tap an item to grey it out as
+// sold out; tap again to bring it back. Saved to Firebase so it stays put
+// and the ordering app hides it from customers too.
+var BOARD = [
+  {c:"Shawarma", i:[
+    ["sh7","Beef Shawarma",5.90],["sh11","Chicken Shawarma",4.90],
+    ["sh2","Mixed Shawarma",6.90],["sh5","Beef Combo (Rice & Fries)",6.90],
+    ["sh6","Chicken Combo (Rice & Fries)",5.90]]},
+  {c:"Chicken", i:[
+    ["m12","Chicken Chop",4.80],["m14","Chicken Cutlet",4.80],
+    ["m3","Hawaiian Chicken Chop",6.20],["m4","Mexican Chicken Chop",5.50],
+    ["m10","Black Pepper Chicken",5.00],["m11","Mushroom Sauce Chicken",5.00],
+    ["m6","Garlic Soya Korean Chicken",5.50],["m7","Sweet Spicy Korean Chicken",5.50]]},
+  {c:"Fish", i:[
+    ["f4","Grilled Fish (Fries & Salad)",5.00],["f6","Grilled Fish Butter Rice",5.00],
+    ["f8","Fish & Chips",4.80],["f9","Tempura Fish & Chips",4.80],
+    ["f3","Mexican Fish & Chips",5.50]]},
+  {c:"Spaghetti & Breakfast", i:[
+    ["sp1","Spaghetti Chicken Bolognese",4.80],["sp2","Spaghetti Mushroom Cream",4.80],
+    ["b1","Omelette Breakfast Set",4.50],["b2","Toast Breakfast Set",4.00],
+    ["b3","Scrambled Egg Breakfast Set",4.00]]},
+  {c:"Snacks", i:[
+    ["sn0","Cheese Fries",3.00],["sn13","Fries",2.00],
+    ["sn2","Popcorn Chicken",3.50],["sn3","Chicken Nuggets",3.00],
+    ["sn9","Chicken Burger",2.00,"BROWN paper"],["sn11","Fish Burger",2.00,"WHITE paper"]]}
+];
+
+var soldOut = {};
+
+function boardHtml(){
+  var h = '<div class="board"><div class="board-hd">Today\'s Menu'
+        + '<span class="board-hint">Tap an item to mark it sold out</span></div>'
+        + '<div class="wrap-note">'
+        +   '<span class="wrap-chip wrap-white">WHITE paper = FISH Burger</span>'
+        +   '<span class="wrap-chip wrap-brown">BROWN paper = CHICKEN Burger</span>'
+        + '</div>'
+        + '<div class="board-cols">';
+  for(var c=0;c<BOARD.length;c++){
+    h += '<div><div class="cat-name">'+BOARD[c].c+'</div>';
+    for(var j=0;j<BOARD[c].i.length;j++){
+      var it=BOARD[c].i[j], out=!!soldOut[it[0]];
+      var note = it[3] ? '<span class="b-note">'+it[3]+'</span>' : '';
+      h += '<div class="b-item'+(out?' out':'')+'" data-bid="'+it[0]+'">'
+         + '<span class="b-name">'+it[1]+note+'</span>'
+         + '<span class="b-price">'+(out?'SOLD OUT':'$'+it[2].toFixed(2))+'</span></div>';
+    }
+    h += '</div>';
+  }
+  return h+'</div></div>';
+}
+
+function toggleSoldOut(id){
+  var now = !soldOut[id];
+  soldOut[id] = now;
+  renderDisplay();
+  if(db){
+    try{ db.ref('board_soldout/'+id).set(now?true:null); }catch(e){}
+    try{ db.ref('availability/'+id).set(!now); }catch(e){}
+  }
+}
+
+document.addEventListener('click', function(ev){
+  var el = ev.target && ev.target.closest ? ev.target.closest('.b-item') : null;
+  if(el && el.getAttribute('data-bid')) toggleSoldOut(el.getAttribute('data-bid'));
+});
+
 function getMissed(){ return Object.entries(entries).filter(function(kv){return kv[1].status==='missed'&&kv[1].queueNo!=null;}).sort(function(a,b){return b[1].calledAt-a[1].calledAt;}).slice(0,MAX_MISSED); }
 
 function idleScreenHtml(){
-  return '<div class="empty-state"><div class="empty-icon">&#x1F37D;&#xFE0F;</div><div class="empty-txt">'+(gotData?'Waiting for orders':'Connecting...')+'</div></div>';
+  if(!gotData) return '<div class="empty-state"><div class="empty-icon">&#x1F37D;&#xFE0F;</div><div class="empty-txt">Connecting...</div></div>';
+  return boardHtml();
 }
 
 function renderDisplay(){
@@ -360,6 +451,11 @@ function tick(){
 setInterval(tick,1000);
 
 if(db){
+  db.ref('board_soldout').on('value', function(snap){
+    soldOut = snap.val() || {};
+    renderDisplay();
+  }, function(){});
+
   db.ref('queue_display').on('value', function(snap){
     gotData=true;
     var data=snap.val()||{};
