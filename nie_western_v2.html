@@ -2411,8 +2411,9 @@ function renderAdminMenu(){
 
   const modSection = `
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">
-      <div style="background:#F5F3F0;padding:12px 16px">
+      <div style="background:#F5F3F0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px">
         <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">⚙️ Modifiers</div>
+        <button onclick="clearAllSoldOut()" style="background:#fff;color:#78716C;border:1px solid #E5E0D8;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600">Turn all items back ON</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid #E5E0D8">
         <div style="flex:1">
@@ -2449,6 +2450,18 @@ function renderAdminMenu(){
       `).join("")}
     </div>
   `).join("");
+}
+
+// Deliberate, admin-only clear. Replaces the old automatic wipe.
+function clearAllSoldOut(){
+  if(!confirm("Turn every item back ON for all customers?")) return;
+  db.ref("availability").remove()
+    .then(()=>{
+      menu.forEach(c=>c.items.forEach(i=>{ i.avail = true; }));
+      saveMenu(); renderAdminMenu(); renderMenu();
+      toast("\u2713 All items are back ON");
+    })
+    .catch(e=>showError("Could not clear", e));
 }
 
 function toggleMod(mod){
@@ -3636,13 +3649,13 @@ db.ref("stall_status").on("value", snap=>{
   }
 }, err=>showError("Stall status", err));
 
-// Clear old Firebase availability if version changed
-// Bumped to nie_v6 — Onion Rings and Garden Salad have new ids, so any
-// availability flags saved against the old duplicate ids must be cleared.
+// NOTE: this used to call db.ref("availability").remove() whenever the local
+// version flag did not match. That ran on customer phones too, so every new
+// customer wiped the whole sold-out list for everyone and items came back on.
+// Shared data must never be cleared by a device just because it is new here.
 const menuVersion = "nie_v6";
 if(ls("last_menu_version","") !== menuVersion){
-  db.ref("availability").remove();
-  lss("last_menu_version", menuVersion);
+  lss("last_menu_version", menuVersion);   // remember it, but touch nothing shared
 }
 
 // Listen for availability changes from admin — syncs to all devices
