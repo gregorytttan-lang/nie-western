@@ -95,16 +95,16 @@ body{background:#0A0908;font-family:'DM Sans',sans-serif;color:#FAF9F7;-webkit-u
 .board-hint{font-size:1.5vh;font-weight:500;color:rgba(255,255,255,.35);letter-spacing:0}
 .board-cols{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:.7vh 1.4vw;
   align-content:start;padding-top:1vh;overflow:hidden}
-.cat-name{font-size:1.95vh;font-weight:800;color:#F5C542;letter-spacing:.06em;
+.cat-name{font-size:2.5vh;font-weight:800;color:#F5C542;letter-spacing:.06em;
   margin:.5vh 0;text-transform:uppercase}
 .b-item{display:flex;justify-content:space-between;align-items:baseline;gap:1vw;
-  padding:.62vh .8vw;border-radius:.8vh;cursor:pointer;transition:background .15s}
+  padding:1.05vh .8vw;border-radius:.8vh;cursor:pointer;transition:background .15s}
 .b-item:active{background:rgba(255,255,255,.10)}
-.b-name{font-size:2vh;font-weight:600;color:#fff;line-height:1.25}
-.b-price{font-size:2vh;font-weight:800;color:#4ADE80;white-space:nowrap}
+.b-name{font-size:2.9vh;font-weight:600;color:#fff;line-height:1.25}
+.b-price{font-size:2.9vh;font-weight:800;color:#4ADE80;white-space:nowrap}
 .b-item.out .b-name{color:rgba(255,255,255,.26);text-decoration:line-through}
 .b-item.out .b-price{color:#DC2626;font-size:1.5vh;letter-spacing:.06em}
-.b-note{display:block;font-size:1.35vh;font-weight:700;color:#F5C542;letter-spacing:.05em;margin-top:.1vh}
+.b-note{display:block;font-size:1.8vh;font-weight:700;color:#F5C542;letter-spacing:.05em;margin-top:.1vh}
 .b-item.out .b-note{color:rgba(255,255,255,.22)}
 .wrap-note{display:flex;gap:1.2vw;padding:.9vh 0 .2vh;flex-wrap:wrap;flex-shrink:0}
 .wrap-chip{font-size:1.75vh;font-weight:800;padding:.55vh 1.1vw;border-radius:.8vh;letter-spacing:.03em}
@@ -310,33 +310,30 @@ function getActive(){ return Object.entries(entries).filter(function(kv){return 
 // sold out; tap again to bring it back. Saved to Firebase so it stays put
 // and the ordering app hides it from customers too.
 var BOARD = [
-  {c:"Shawarma", i:[
-    ["sh7","Beef Shawarma",5.90],["sh11","Chicken Shawarma",4.90],
-    ["sh2","Mixed Shawarma",6.90],["sh5","Beef Combo (Rice & Fries)",6.90],
-    ["sh6","Chicken Combo (Rice & Fries)",5.90]]},
-  {c:"Chicken", i:[
-    ["m12","Chicken Chop",4.80],["m14","Chicken Cutlet",4.80],
-    ["m3","Hawaiian Chicken Chop",6.20],["m4","Mexican Chicken Chop",5.50],
-    ["m10","Black Pepper Chicken",5.00],["m11","Mushroom Sauce Chicken",5.00],
-    ["m6","Garlic Soya Korean Chicken",5.50],["m7","Sweet Spicy Korean Chicken",5.50]]},
-  {c:"Fish", i:[
-    ["f4","Grilled Fish (Fries & Salad)",5.00],["f6","Grilled Fish Butter Rice",5.00],
-    ["f8","Fish & Chips",4.80],["f9","Tempura Fish & Chips",4.80],
-    ["f3","Mexican Fish & Chips",5.50]]},
-  {c:"Spaghetti & Breakfast", i:[
-    ["sp1","Spaghetti Chicken Bolognese",4.80],["sp2","Spaghetti Mushroom Cream",4.80],
-    ["b1","Omelette Breakfast Set",4.50],["b2","Toast Breakfast Set",4.00],
-    ["b3","Scrambled Egg Breakfast Set",4.00]]},
-  {c:"Snacks", i:[
-    ["sn0","Cheese Fries",3.00],["sn13","Fries",2.00],
-    ["sn2","Popcorn Chicken",3.50],["sn3","Chicken Nuggets",3.00],
-    ["sn9","Chicken Burger",2.00,"BROWN paper"],["sn11","Fish Burger",2.00,"WHITE paper"]]}
+  {c:"Take & Go", i:[
+    ["sn1","Mozzarella Cheese Sticks",3.50],
+    ["sn2","Popcorn Chicken",3.50],
+    ["sn3","Chicken Nuggets (6 pcs)",3.00],
+    ["sn5","Spicy Chicken Nuggets (5 pcs)",3.00],
+    ["sn6","Potato Apple Salad",2.80],
+    ["sn7","Chicken Cheese Hotdog Bun",2.70],
+    ["sn8","Korean Sandwich",2.50]]},
+  {c:"Burgers & Buns", i:[
+    ["sn9","Chicken Burger",2.00,"BROWN paper"],
+    ["sn11","Fish Burger",2.00,"WHITE paper"],
+    ["sn10","Chicken Cheese Sausage",2.00],
+    ["sn14","Sandwich",1.60]]},
+  {c:"Hot from the Fryer", i:[
+    ["sn0","Cheese Fries",3.00],
+    ["sn13","Fries",2.00],
+    ["sn12","Hash Browns (3 pcs)",2.00],
+    ["sn15","Onion Rings",2.00]]}
 ];
 
 var soldOut = {};
 
 function boardHtml(){
-  var h = '<div class="board"><div class="board-hd">Today\'s Menu'
+  var h = '<div class="board"><div class="board-hd">Take &amp; Go \u00b7 \u81ea\u53d6\u5c0f\u98df'
         + '<span class="board-hint">Tap an item to mark it sold out</span></div>'
         + '<div class="wrap-note">'
         +   '<span class="wrap-chip wrap-white">WHITE paper = FISH Burger</span>'
