@@ -1577,8 +1577,13 @@ async function proceedToPayment(){
     reservedSpecialQty = granted;
   }
 
+  // Claim the queue number now, while the customer still has the QR to scan.
+  // Doing it at "I Have Paid" meant every phone hit the counter in the same
+  // instant during the rush, which is how numbers ended up duplicated.
+  const claimedQ = await nextQ();
+
   const remarks = document.getElementById("order-remarks").value.trim();
-  pendingOrder = {id:uid(), items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
+  pendingOrder = {id:uid(), claimedQ, items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
   closeCart();
   // Render pay modal items
   const addons = c => Object.values(c.choices||{}).flatMap(x=>Array.isArray(x)?x:[x]).filter(x=>{const n=x.name||x;return n!=="No thanks"&&n!=="None";});
@@ -1705,8 +1710,8 @@ async function confirmPayment(paymentMethod='paynow'){
     const trackBar = document.getElementById("order-tracking-bar");
     if(trackBar) trackBar.style.display="none";
   } else {
-    // Normal flow: queue number + kitchen
-    const queueNo = await nextQ();
+    // Normal flow: use the number claimed when the payment screen opened
+    const queueNo = pendingOrder.claimedQ || await nextQ();
     o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
     orders.push(o);
     saveOrderToFB(o);
@@ -2024,6 +2029,39 @@ function confirmCollected(id){
     markCashPaid(id);
   }
   updOrder(id, "collected");
+}
+
+// Last line of defence. If two live orders ever share a number, calling it
+// brings two customers to the counter. Renumber the later one immediately,
+// before the chef calls it.
+let fixingDupes = false;
+function resolveDuplicateQueueNos(){
+  if(fixingDupes) return;
+  const t = today();
+  const live = orders.filter(o=>o && o.queueNo > 0 && o.status !== "cancelled"
+    && o.status !== "collected" && new Date(o.createdAt).toDateString() === t);
+  const byNo = {};
+  live.forEach(o=>{ (byNo[o.queueNo] = byNo[o.queueNo] || []).push(o); });
+  const clashes = Object.keys(byNo).filter(n=>byNo[n].length > 1);
+  if(!clashes.length) return;
+  fixingDupes = true;
+  let next = todayQueueMax();
+  clashes.forEach(n=>{
+    // keep the earliest order on the number, move the rest
+    const group = byNo[n].slice().sort((a,b)=>a.createdAt - b.createdAt);
+    group.slice(1).forEach(o=>{
+      next++;
+      const from = o.queueNo, to = next;
+      o.queueNo = to;
+      ordersRef.child(o.id).update({queueNo: to, renumberedFrom: from})
+        .catch(e=>showError("Renumber", e));
+      toast("\u26a0\ufe0f " + fmtQ(from) + " was duplicated \u2014 moved to " + fmtQ(to), "#C4572A");
+    });
+  });
+  // keep the shared counter ahead of what we just handed out
+  try{ db.ref("queue/" + t).transaction(cur=>Math.max(cur || 0, next)); }catch(e){}
+  fixingDupes = false;
+  renderKitchen();
 }
 
 function updateKitchenBadge(){
@@ -3849,6 +3887,7 @@ ordersRef.on("value", snap=>{
   orders.forEach(o=>knownOrderIds.add(o.id));
   isFirstLoad = false;
 
+  resolveDuplicateQueueNos();   // never let two live orders share a number
   renderMenu();
   renderKitchen();
   updateKitchenBadge();
