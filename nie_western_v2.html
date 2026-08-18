@@ -1663,9 +1663,13 @@ async function confirmPayment(paymentMethod='paynow'){
     if(finished) return;
     finished = true;
     clearTimeout(watchdog);
-    showError("Order failed", err);
     if(heldSpecial > 0) releaseSpecial(heldSpecial);
     resetPayButtons();
+    console.error("confirmPayment failed:", err);
+    // Be explicit. A vague toast here is how an order goes missing quietly.
+    alert("\u26a0\ufe0f ORDER NOT SENT\n\nWe could not reach the kitchen \u2014 your order has NOT been placed.\n\n"
+      + "Please check your internet and tap the button again.\n\n"
+      + "If you have already paid, show this screen and your payment to our staff at the counter.");
   };
   // Hard stop: whatever happens, the customer is never left on "Processing"
   const watchdog = setTimeout(()=>unstick(new Error("timed out after 15s")), 15000);
@@ -1678,8 +1682,8 @@ async function confirmPayment(paymentMethod='paynow'){
   // Snacks-only: no queue number, no kitchen, just thank you
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
+    await saveOrderConfirmed(o);   // must be on the server before we thank them
     orders.push(o);
-    saveOrderToFB(o);  // Save to Firebase
     // Send directly to Google Sheets immediately (most reliable for snacks)
     try {
       const itemMap = {};
@@ -1713,8 +1717,9 @@ async function confirmPayment(paymentMethod='paynow'){
     // Normal flow: use the number claimed when the payment screen opened
     const queueNo = pendingOrder.claimedQ || await nextQ();
     o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
+    // Do not hand out a queue number until the kitchen can actually see it
+    await saveOrderConfirmed(o);
     orders.push(o);
-    saveOrderToFB(o);
     cart = []; pendingOrder = null;
     closePayment();
     document.getElementById("queue-number").textContent = fmtQ(queueNo);
@@ -2500,6 +2505,46 @@ function updatePrice(cid,iid,p){
 
 function resetMenu(){ menu=DEFAULT_MENU; saveMenu(); renderAdminMenu(); }
 
+let orderFilter = "";
+let orderShowAll = false;
+
+// The old list was capped at 30, so anything older simply vanished and an
+// order could look lost when it was there all along.
+function renderOrderList(){
+  const el = document.getElementById("order-list");
+  if(!el) return;
+  const t = today();
+  let list = orders.filter(o=>o && (orderShowAll || new Date(o.createdAt).toDateString() === t));
+  const q = (orderFilter || "").trim().toLowerCase();
+  if(q){
+    list = list.filter(o=>
+      String(o.queueNo).indexOf(q.replace("#","")) === 0 ||
+      (o.items || []).some(i=>(i.name || "").toLowerCase().indexOf(q) !== -1)
+    );
+  }
+  list = list.slice().sort((a,b)=>b.createdAt - a.createdAt);
+  if(!list.length){
+    el.innerHTML = "<div style='color:#78716C;font-size:13px;padding:8px 0'>No matching orders.</div>";
+    return;
+  }
+  el.innerHTML =
+    `<div style="font-size:11px;color:#78716C;margin-bottom:6px">Showing ${list.length} order${list.length===1?"":"s"}</div>`
+    + list.map(o=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid #E5E0D8">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:15px;color:#C4572A">${o.queueNo ? fmtQ(o.queueNo) : "\u2014"}</span>
+            <span style="font-size:10px;background:#F5F3F0;color:#78716C;border-radius:6px;padding:2px 8px">${o.status}</span>
+            ${o.paymentMethod==="cash"?`<span style="font-size:10px;background:${o.cashCollected?"#F0FDF4":"#FEF2F2"};color:${o.cashCollected?"#166534":"#DC2626"};border-radius:6px;padding:2px 8px;font-weight:700">${o.cashCollected?"CASH PAID":"CASH DUE"}</span>`:""}
+            <span style="font-size:12px;color:#78716C">${tme(o.createdAt)}</span>
+            <span style="font-size:11px;color:#A8A29E">${new Date(o.createdAt).toLocaleDateString("en-SG")}</span>
+          </div>
+          <div style="font-size:11px;color:#78716C;margin-top:2px">${(o.items||[]).map(i=>`${i.qty}\u00d7${i.name}`).join(", ")}</div>
+        </div>
+        <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#1C1917;margin-left:12px">${fmtS(o.total)}</span>
+      </div>`).join("");
+}
+
 function renderReports(){
   const todayStr = today();
   // Merge Firebase orders with any locally saved snacks orders
@@ -2669,11 +2714,18 @@ function renderReports(){
 
     <!-- Orders list -->
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;padding:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">📋 Orders</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">📋 Orders <span style="font-size:12px;font-weight:400;color:#78716C">(${orders.length} total)</span></div>
         ${orders.length?`<button onclick="if(confirm('⚠️ WARNING: This will permanently delete ALL orders and sales history. Cannot be undone!\\n\\nAre you sure?')){if(confirm('Last chance! Tap OK to permanently wipe all data.')){ordersRef.remove();orders=[];renderReports();}}" style="background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">⚠️ Wipe All Data</button>`:""}
       </div>
-      ${!orders.length?"<div style='color:#78716C;font-size:13px'>No orders yet.</div>":[...orders].reverse().slice(0,30).map(o=>`
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="ord-search" placeholder="Search queue no. or item..." oninput="orderFilter=this.value;renderOrderList()"
+          style="flex:1;padding:9px 12px;border:1px solid #E5E0D8;border-radius:8px;font-size:13px;outline:none">
+        <button onclick="orderShowAll=!orderShowAll;renderReports()" id="ord-all-btn"
+          style="background:${orderShowAll?"#C4572A":"transparent"};color:${orderShowAll?"#fff":"#78716C"};border:1px solid #E5E0D8;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;white-space:nowrap">${orderShowAll?"All days":"Today"}</button>
+      </div>
+      <div id="order-list"></div>
+      <div style="display:none">${!orders.length?"<div style='color:#78716C;font-size:13px'>No orders yet.</div>":[...orders].slice(0,0).map(o=>`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid #E5E0D8">
           <div>
             <div style="display:flex;align-items:center;gap:8px">
@@ -2684,7 +2736,7 @@ function renderReports(){
             <div style="font-size:11px;color:#78716C;margin-top:2px">${o.items.map(i=>`${i.qty}×${i.name}`).join(", ").slice(0,60)}</div>
           </div>
           <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:13px;color:#1C1917;margin-left:12px">${fmtS(o.total)}</span>
-        </div>`).join("")}
+        </div>`).join("")}</div>
     </div>
 
     <!-- Supplier Payouts -->
@@ -2721,6 +2773,7 @@ function renderReports(){
   `;
   renderPayouts();
   renderMonthlyArchives();
+  renderOrderList();
 }
 
 // ── GOOGLE SHEETS INTEGRATION ─────────────────────────────────────────────────
@@ -3717,6 +3770,35 @@ db.ref("archives/payouts_sent").on("value", snap=>{
 function saveOrderToFB(order){
   // JSON round-trip drops any undefined property. Firebase .set() throws on
   // them, and a throw here means the order never reaches the kitchen.
+  const clean = JSON.parse(JSON.stringify(order));
+  return ordersRef.child(order.id).set(clean);
+}
+
+// The order MUST be on the server before the customer is given a queue number.
+// This used to be fire-and-forget: if the write failed the customer still saw
+// their number while the kitchen never received the order.
+function saveOrderConfirmed(order, tries){
+  tries = tries || 0;
+  return new Promise((resolve, reject)=>{
+    let settled = false;
+    const timer = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      if(tries < 2) resolve(saveOrderConfirmed(order, tries + 1));
+      else reject(new Error("no response from server"));
+    }, 7000);
+    saveOrderFB_attempt(order)
+      .then(()=>{ if(settled) return; settled = true; clearTimeout(timer); resolve(true); })
+      .catch(err=>{
+        if(settled) return;
+        settled = true; clearTimeout(timer);
+        if(tries < 2) resolve(saveOrderConfirmed(order, tries + 1));
+        else reject(err);
+      });
+  });
+}
+
+function saveOrderFB_attempt(order){
   const clean = JSON.parse(JSON.stringify(order));
   return ordersRef.child(order.id).set(clean);
 }
