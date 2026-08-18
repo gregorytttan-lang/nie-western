@@ -2587,23 +2587,56 @@ function renderRushChart(){
   const total = list.length;
 
   el.innerHTML =
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:10px;color:#78716C;font-weight:700;text-transform:uppercase;letter-spacing:.06em">
+       <span style="width:46px;flex-shrink:0">Time</span>
+       <span style="flex:1"></span>
+       <span style="width:52px;text-align:right;flex-shrink:0">Orders</span>
+       <span style="width:64px;text-align:right;flex-shrink:0">Sales</span>
+       <span style="width:66px;text-align:right;flex-shrink:0">Rate/hr</span>
+     </div>` +
     keys.map(k=>{
       const n = slots[k].n, avg = n / nDays;
       const pct = Math.round((n / peak) * 100);
       const hot = k === busiest;
+      const rev = slots[k].rev / nDays;          // per day
+      const perHr = rev * 2;                      // this half hour, annualised to an hourly rate
       return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
         <span style="font-size:12px;color:${hot?"#C4572A":"#78716C"};font-weight:${hot?800:600};width:46px;flex-shrink:0">${label(k)}</span>
         <div style="flex:1;background:#F5F3F0;border-radius:5px;height:22px;overflow:hidden">
           <div style="width:${pct}%;height:100%;background:${hot?"#C4572A":"#E8A87C"};border-radius:5px"></div>
         </div>
-        <span style="font-size:12px;font-weight:700;color:#1C1917;width:${rushAllDays?"64px":"44px"};text-align:right;flex-shrink:0">${rushAllDays ? (avg.toFixed(1)+"/day") : (n+" ord")}</span>
+        <span style="font-size:12px;font-weight:700;color:#1C1917;width:52px;text-align:right;flex-shrink:0">${rushAllDays ? (avg.toFixed(1)+"/d") : (n+" ord")}</span>
+        <span style="font-size:12px;font-weight:800;color:#C4572A;width:64px;text-align:right;flex-shrink:0">${fmtS(rev)}</span>
+        <span style="font-size:11px;color:#78716C;width:66px;text-align:right;flex-shrink:0">${fmtS(perHr)}/hr</span>
       </div>`;
     }).join("")
-    + `<div style="border-top:1px solid #E5E0D8;margin-top:10px;padding-top:10px;font-size:13px;color:#1C1917;line-height:1.7">
-         <strong>Busiest half hour:</strong> ${label(busiest)} \u2014 ${rushAllDays ? ((slots[busiest].n/nDays).toFixed(1)+" orders/day") : (slots[busiest].n+" orders")}<br>
-         <strong>That is ${Math.round(slots[busiest].n/total*100)}%</strong> of ${rushAllDays ? "all" : "today\u2019s"} ${total} orders in 30 minutes<br>
-         <span style="color:#78716C">\u2248 ${(slots[busiest].n/nDays/30).toFixed(1)} orders per minute at the peak</span>
-       </div>`;
+    + (function(){
+        // group into whole hours so the value figure is directly comparable
+        // with an hourly wage
+        const hrs = {};
+        keys.forEach(k=>{
+          const h = Math.floor(k/2);
+          if(!hrs[h]) hrs[h] = {n:0, rev:0};
+          hrs[h].n += slots[k].n; hrs[h].rev += slots[k].rev;
+        });
+        const hKeys = Object.keys(hrs).map(Number).sort((a,b)=>a-b);
+        const bestHr = hKeys.reduce((m,h)=>hrs[h].rev > hrs[m].rev ? h : m, hKeys[0]);
+        const bestRev = hrs[bestHr].rev / nDays;
+        const dayRev = list.reduce((s,o)=>s+(Number(o.total)||0),0) / nDays;
+        const openHrs = hKeys.length;
+        return `<div style="border-top:1px solid #E5E0D8;margin-top:12px;padding-top:12px;font-size:13px;color:#1C1917;line-height:1.8">
+          <div style="font-size:11px;color:#78716C;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Value per hour</div>
+          <strong>Best hour:</strong> ${String(bestHr).padStart(2,"0")}:00\u2013${String(bestHr+1).padStart(2,"0")}:00 \u2014 <span style="color:#C4572A;font-weight:800">${fmtS(bestRev)}/hr</span>
+          ${rushAllDays?" (daily average)":""}<br>
+          <strong>Average across ${openHrs} trading hours:</strong> ${fmtS(dayRev/openHrs)}/hr<br>
+          <strong>Peak rate:</strong> ${(slots[busiest].n/nDays/30).toFixed(1)} orders per minute at ${label(busiest)}<br>
+          <span style="color:#78716C">${Math.round(slots[busiest].n/total*100)}% of ${rushAllDays?"all":"today\u2019s"} ${total} orders land in that one half hour</span>
+          <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:9px 12px;margin-top:10px;font-size:12px;color:#92400E;line-height:1.6">
+            An extra pair of hands only pays if the hour they cover earns more than their wage plus the food cost of what they help sell.
+            Compare the best-hour figure above against what that hour costs you in labour.
+          </div>
+        </div>`;
+      })();
 }
 
 function renderOrderList(){
