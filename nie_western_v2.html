@@ -932,7 +932,7 @@ function renderMenu(){
   };
   const avail = menu
     .filter(c=> isCatAvail(c))
-    .map(c=>({...c,items:c.items.filter(i=>i.avail!==false)}))
+    .map(c=>({...c,items:c.items.filter(i=>i.avail!==false && !hiddenByLink(i.id))}))
     .filter(c=>c.items.length);
   // Auto-switch to Snacks tab on first load if ?snacks=1
   if(isSnacksMode && !snacksInitDone){
@@ -985,6 +985,47 @@ function renderMenu(){
 function switchCat(i){ curCat=i; renderMenu(); }
 
 // Snacks auto-switch handled in renderMenu
+
+// When a base ingredient runs out, everything made with it must go too.
+// Switching "Add Rice" off used to leave the rice mains and the "+ Butter Rice"
+// side still on sale, so customers kept ordering rice you did not have.
+const LINKED_SOLD_OUT = {
+  a11: {   // Add Rice
+    label: "Rice",
+    items: ["sh1","sh3","sh5","sh6","sh8","sh12",   // shawarma with rice
+            "m8","m9","m10","m11",                   // chicken mains with rice
+            "f6"],                                   // grilled fish butter rice
+    sides: ["+ Butter Rice"]
+  },
+  a6: {    // Add Spaghetti
+    label: "Spaghetti",
+    items: ["sp1","sp2","m1","m2","f1"],
+    sides: ["+ Spaghetti \u2014 Chicken Bolognese", "+ Spaghetti \u2014 Mushroom Cream"]
+  }
+};
+
+// Is this controller (a11 / a6) currently switched off?
+function linkOff(ctrlId){
+  for(const c of menu) for(const i of c.items) if(i.id === ctrlId) return i.avail === false;
+  return false;
+}
+
+// Should this item be hidden because its base ingredient is sold out?
+function hiddenByLink(id){
+  for(const ctrl in LINKED_SOLD_OUT){
+    if(linkOff(ctrl) && LINKED_SOLD_OUT[ctrl].items.indexOf(id) !== -1) return true;
+  }
+  return false;
+}
+
+// Side options to drop from the modifier popup
+function blockedSides(){
+  let out = [];
+  for(const ctrl in LINKED_SOLD_OUT){
+    if(linkOff(ctrl)) out = out.concat(LINKED_SOLD_OUT[ctrl].sides);
+  }
+  return out;
+}
 
 function getItem(id){
   if(id === SPECIAL_ID) return specialItem();
@@ -1141,9 +1182,12 @@ function handleAdd(id){
     // Build side options — remove spaghetti if item already has spaghetti
     const hasSauce = item.modifiers.some(m=>m.id==="sauce");
     const isSpagItem = ["sp1","sp2"].includes(item.id);
-    const effectiveSideOptions = isSpagItem
+    const blocked = blockedSides();
+    let effectiveSideOptions = isSpagItem
       ? sideOptions.filter(o=>!o.name.includes("Spaghetti"))
       : sideOptions;
+    // Remove sides whose base ingredient has run out
+    effectiveSideOptions = effectiveSideOptions.filter(o=>blocked.indexOf(o.name) === -1);
     const filteredItem = {...item, modifiers: item.modifiers
       .filter(m=> (m.id==="side" && sideOn) || m.id==="sauce")
       .map(m=> m.id==="side" ? {...m, options: effectiveSideOptions} : m)};
@@ -2446,6 +2490,8 @@ function renderAdminMenu(){
           <div style="flex:1">
             <div style="font-size:13px;font-weight:600;color:${item.avail===false?"#D4CFC8":"#1C1917"}">${item.name}</div>
             <div style="font-size:12px;color:rgba(255,255,255,0.6)">${item.desc||""}</div>
+            ${LINKED_SOLD_OUT[item.id]?`<div style="font-size:11px;color:${item.avail===false?"#DC2626":"#C4572A"};font-weight:600;margin-top:2px">${item.avail===false?"\u2713 also hiding":"Turning this off also hides"} all ${LINKED_SOLD_OUT[item.id].label.toLowerCase()} dishes &amp; the ${LINKED_SOLD_OUT[item.id].label.toLowerCase()} side option</div>`:""}
+            ${hiddenByLink(item.id)?`<div style="font-size:11px;color:#DC2626;font-weight:600;margin-top:2px">\u2014 hidden: base ingredient sold out</div>`:""}
           </div>
           <input type="number" step="0.10" value="${item.price}" onchange="updatePrice('${cat.id}','${item.id}',this.value)" style="width:72px;background:#F5F3F0;color:#C4572A;border:1px solid #E5E0D8;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700">
           <button onclick="toggleAvail('${cat.id}','${item.id}')" style="background:${item.avail===false?"#F5F3F0":"#DCFCE7"};color:${item.avail===false?"#78716C":"#16A34A"};border:1px solid ${item.avail===false?"#E5E0D8":"#86EFAC"};border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;min-width:40px">
