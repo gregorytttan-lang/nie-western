@@ -2556,6 +2556,56 @@ let orderShowAll = false;
 
 // The old list was capped at 30, so anything older simply vanished and an
 // order could look lost when it was there all along.
+let rushAllDays = false;
+
+// Orders per 30 minutes. Without this there is no way to tell a capacity
+// problem (steady overload) from a peak problem (everyone at once).
+function renderRushChart(){
+  const el = document.getElementById("rush-chart");
+  if(!el) return;
+  const t = today();
+  const list = orders.filter(o=>o && o.status !== "cancelled"
+    && (rushAllDays || new Date(o.createdAt).toDateString() === t));
+  if(!list.length){ el.innerHTML = "<div style='color:#78716C;font-size:13px'>No orders yet.</div>"; return; }
+
+  const days = {};
+  list.forEach(o=>{ days[new Date(o.createdAt).toDateString()] = 1; });
+  const nDays = Math.max(1, Object.keys(days).length);
+
+  const slots = {};
+  list.forEach(o=>{
+    const d = new Date(o.createdAt);
+    const key = d.getHours() * 2 + (d.getMinutes() >= 30 ? 1 : 0);
+    if(!slots[key]) slots[key] = {n:0, rev:0};
+    slots[key].n += 1;
+    slots[key].rev += Number(o.total) || 0;
+  });
+  const keys = Object.keys(slots).map(Number).sort((a,b)=>a-b);
+  const peak = Math.max.apply(null, keys.map(k=>slots[k].n));
+  const busiest = keys.reduce((m,k)=>slots[k].n > slots[m].n ? k : m, keys[0]);
+  const label = k => String(Math.floor(k/2)).padStart(2,"0") + (k%2 ? ":30" : ":00");
+  const total = list.length;
+
+  el.innerHTML =
+    keys.map(k=>{
+      const n = slots[k].n, avg = n / nDays;
+      const pct = Math.round((n / peak) * 100);
+      const hot = k === busiest;
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="font-size:12px;color:${hot?"#C4572A":"#78716C"};font-weight:${hot?800:600};width:46px;flex-shrink:0">${label(k)}</span>
+        <div style="flex:1;background:#F5F3F0;border-radius:5px;height:22px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:${hot?"#C4572A":"#E8A87C"};border-radius:5px"></div>
+        </div>
+        <span style="font-size:12px;font-weight:700;color:#1C1917;width:${rushAllDays?"64px":"44px"};text-align:right;flex-shrink:0">${rushAllDays ? (avg.toFixed(1)+"/day") : (n+" ord")}</span>
+      </div>`;
+    }).join("")
+    + `<div style="border-top:1px solid #E5E0D8;margin-top:10px;padding-top:10px;font-size:13px;color:#1C1917;line-height:1.7">
+         <strong>Busiest half hour:</strong> ${label(busiest)} \u2014 ${rushAllDays ? ((slots[busiest].n/nDays).toFixed(1)+" orders/day") : (slots[busiest].n+" orders")}<br>
+         <strong>That is ${Math.round(slots[busiest].n/total*100)}%</strong> of ${rushAllDays ? "all" : "today\u2019s"} ${total} orders in 30 minutes<br>
+         <span style="color:#78716C">\u2248 ${(slots[busiest].n/nDays/30).toFixed(1)} orders per minute at the peak</span>
+       </div>`;
+}
+
 function renderOrderList(){
   const el = document.getElementById("order-list");
   if(!el) return;
@@ -2723,6 +2773,16 @@ function renderReports(){
       `}
     </div>
 
+    <!-- Rush hour breakdown -->
+    <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">\u23f1\ufe0f Orders by Time</div>
+        <button onclick="rushAllDays=!rushAllDays;renderReports()" style="background:${rushAllDays?"#C4572A":"transparent"};color:${rushAllDays?"#fff":"#78716C"};border:1px solid #E5E0D8;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600">${rushAllDays?"Average of all days":"Today"}</button>
+      </div>
+      <div style="font-size:12px;color:#78716C;margin-bottom:12px">Where the pressure actually lands. Use it to decide staffing and prep.</div>
+      <div id="rush-chart"></div>
+    </div>
+
     <!-- Chef's protein count -->
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;padding:16px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
@@ -2820,6 +2880,7 @@ function renderReports(){
   renderPayouts();
   renderMonthlyArchives();
   renderOrderList();
+  renderRushChart();
 }
 
 // ── GOOGLE SHEETS INTEGRATION ─────────────────────────────────────────────────
