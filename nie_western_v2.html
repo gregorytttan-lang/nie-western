@@ -435,17 +435,17 @@ const SHEETS_URL = CONFIG.SHEETS_URL;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── CHINESE TRANSLATION ─────────────────────────────────────────────────────
+// The language comes from the URL only, never from what this phone chose
+// last time. Remembering it meant a customer who once tapped 中文 - or who
+// scanned the Chinese QR once - got the Chinese menu on every later visit,
+// including from the normal English QR.
 const _urlLang = new URLSearchParams(window.location.search).get("lang");
-if(_urlLang === "cn" || _urlLang === "en"){
-  try { localStorage.setItem("lang_nie", _urlLang); } catch(e){}
-}
-const LANG = _urlLang || (function(){
-  try { return localStorage.getItem("lang_nie") || "en"; } catch(e){ return "en"; }
-})();
+const LANG = (_urlLang === "cn" || _urlLang === "en") ? _urlLang : "en";
+try { localStorage.removeItem("lang_nie"); } catch(e){}   // clear the old sticky value
 function setLang(l){
-  try { localStorage.setItem("lang_nie", l); } catch(e){}
   const u = new URL(window.location.href);
-  u.searchParams.set("lang", l);
+  if(l === "en") u.searchParams.delete("lang");
+  else u.searchParams.set("lang", l);
   window.location.href = u.toString();
 }
 const CN = {
@@ -4296,8 +4296,8 @@ function renderLangSwitch(){
   const btn = (code,label)=>{
     const on = LANG===code;
     return `<button onclick="setLang('${code}')" style="background:${on?"#C4572A":"transparent"};`
-      + `color:${on?"#fff":"#78716C"};border:none;padding:6px 14px;font-size:13px;`
-      + `font-weight:${on?700:500};cursor:pointer">${label}</button>`;
+      + `color:${on?"#fff":"#78716C"};border:none;padding:9px 18px;font-size:15px;`
+      + `font-weight:${on?700:600};cursor:pointer">${label}</button>`;
   };
   el.innerHTML = btn("en","EN") + btn("cn","中文");
 }
