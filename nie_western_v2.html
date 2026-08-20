@@ -3810,7 +3810,9 @@ function buildTicketText(o){
 
   let t = "";
 
-  // Set charset to PC437 (USA) to print $ correctly on SPRT printer
+  // Reset first, so alignment or size left over from an earlier print cannot
+  // carry into this one.
+  t += ESC + '@';
   t += CHARSET_PC437;
 
   // Header
@@ -3923,31 +3925,24 @@ function buildReceiptText(o){
   const ref = "R" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0")
             + String(d.getDate()).padStart(2,"0") + "-" + String(o.queueNo||0).padStart(3,"0");
 
-  // Centre by padding with spaces rather than relying on the printer's
-  // centre command - some printers ignore it, which pushed the heading off
-  // the left edge and cut it off.
-  const ctr = s => {
-    s = ascii(s);
-    if(s.length >= W) return s.slice(0, W);
-    return " ".repeat(Math.floor((W - s.length) / 2)) + s;
-  };
-  // Double-height text is also double-width on many printers, so the name is
-  // centred against half the line width when it is enlarged.
-  const ctrBig = s => {
-    s = ascii(s);
-    const half = Math.floor(W / 2);
-    if(s.length >= half) return s.slice(0, half);
-    return " ".repeat(Math.floor((half - s.length) / 2)) + s;
-  };
+  // Let the printer do the centring. Padding with spaces AND using the
+  // centre command centred it twice, pushing the heading off the right edge
+  // so the start of each line was lost.
+  const RESET     = ESC + '@';                  // clear any state left by the last print
+  const DOUBLE_HW = ESC + '!' + '\x30';         // double height AND width
 
-  let t = ESC + 't' + '\x00';
-  t += ALIGN_L;
-  t += BOLD_ON + DOUBLE_H + ctrBig(CONFIG.BIZ_NAME) + LF + NORMAL + BOLD_OFF;
-  t += ctr(CONFIG.BIZ_ADDR) + LF;
-  if(CONFIG.BIZ_LICENCE) t += ctr("SFA Licence: " + CONFIG.BIZ_LICENCE) + LF;
-  t += ctr("Tel: " + CONFIG.BIZ_PHONE) + LF + LF;
-  t += BOLD_ON + ctr("RECEIPT") + BOLD_OFF + LF;
-  t += line + LF;
+  let t = RESET + ESC + 't' + '\x00';
+  t += ALIGN_C;
+  // Feed clear of the tear bar before anything prints. Tearing off the last
+  // receipt was ripping the top from this one - the stall name and the first
+  // few characters of the address went with it.
+  t += LF + LF + LF;
+  t += BOLD_ON + DOUBLE_HW + ascii(CONFIG.BIZ_NAME) + LF + NORMAL + BOLD_OFF;
+  t += BOLD_ON + DOUBLE_H  + ascii(CONFIG.BIZ_ADDR) + LF + NORMAL + BOLD_OFF;
+  t += BOLD_ON + DOUBLE_H  + ascii("Tel: " + CONFIG.BIZ_PHONE) + LF + NORMAL + BOLD_OFF;
+  if(CONFIG.BIZ_LICENCE) t += ascii("SFA Licence: " + CONFIG.BIZ_LICENCE) + LF;
+  t += LF + BOLD_ON + "RECEIPT" + BOLD_OFF + LF;
+  t += ALIGN_L + line + LF;
   t += row("Receipt No:", ref) + LF;
   t += row("Date:", d.toLocaleDateString("en-SG")) + LF;
   t += row("Time:", d.toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"})) + LF;
@@ -3979,9 +3974,10 @@ function buildReceiptText(o){
   if(o.remarks) t += "Remarks: " + o.remarks + LF;
   t += line + LF;
   t += "Received by: ____________________" + LF + LF;
-  t += ctr("Thank you for your support!") + LF;
-  t += ctr("Please keep this receipt") + LF;
-  t += LF + LF;
+  t += ALIGN_C + "Thank you for your support!" + LF;
+  t += "Please keep this receipt" + LF;
+  t += ALIGN_L;
+  t += LF + LF + LF + LF;   // feed past the tear bar so nothing is lost
   // Keep the control codes, strip anything the printer would misread
   return t.split("").map(ch=>{
     const c = ch.charCodeAt(0);
