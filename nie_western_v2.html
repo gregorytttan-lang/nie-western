@@ -434,6 +434,7 @@ const CONFIG = {
   BIZ_LICENCE:  "",              // <-- optional: your SFA licence number
   BIZ_ADDR:     "NIE Canteen, Stall 4",
   BIZ_PHONE:    "9062 8726",
+  PAPER_CHARS:  48,              // 48 for 80mm paper, change to 32 for 58mm
 };
 // Aliases for backward compat
 const STAFF_PWD  = CONFIG.STAFF_PWD;
@@ -3907,7 +3908,7 @@ function buildReceiptText(o){
   const NORMAL=ESC+'!'+'\x00', BOLD_ON=ESC+'E'+'\x01', BOLD_OFF=ESC+'E'+'\x00';
   const DOUBLE_H=ESC+'!'+'\x10', ALIGN_C=ESC+'a'+'\x01', ALIGN_L=ESC+'a'+'\x00';
   const CUT=GS+'V'+'\x42'+'\x00';
-  const W = 48;
+  const W = CONFIG.PAPER_CHARS || 48;   // 48 = 80mm paper, 32 = 58mm
   const line = "-".repeat(W);
   const row = (l,r)=>{ l=String(l); r=String(r);
     const gap = Math.max(1, W - l.length - r.length);
@@ -3917,13 +3918,31 @@ function buildReceiptText(o){
   const ref = "R" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0")
             + String(d.getDate()).padStart(2,"0") + "-" + String(o.queueNo||0).padStart(3,"0");
 
+  // Centre by padding with spaces rather than relying on the printer's
+  // centre command - some printers ignore it, which pushed the heading off
+  // the left edge and cut it off.
+  const ctr = s => {
+    s = ascii(s);
+    if(s.length >= W) return s.slice(0, W);
+    return " ".repeat(Math.floor((W - s.length) / 2)) + s;
+  };
+  // Double-height text is also double-width on many printers, so the name is
+  // centred against half the line width when it is enlarged.
+  const ctrBig = s => {
+    s = ascii(s);
+    const half = Math.floor(W / 2);
+    if(s.length >= half) return s.slice(0, half);
+    return " ".repeat(Math.floor((half - s.length) / 2)) + s;
+  };
+
   let t = ESC + 't' + '\x00';
-  t += ALIGN_C + BOLD_ON + DOUBLE_H + CONFIG.BIZ_NAME + LF + NORMAL + BOLD_OFF;
-  t += CONFIG.BIZ_ADDR + LF;
-  if(CONFIG.BIZ_LICENCE) t += "SFA Licence: " + CONFIG.BIZ_LICENCE + LF;
-  t += "Tel: " + CONFIG.BIZ_PHONE + LF + LF;
-  t += BOLD_ON + "RECEIPT" + BOLD_OFF + LF;
-  t += ALIGN_L + line + LF;
+  t += ALIGN_L;
+  t += BOLD_ON + DOUBLE_H + ctrBig(CONFIG.BIZ_NAME) + LF + NORMAL + BOLD_OFF;
+  t += ctr(CONFIG.BIZ_ADDR) + LF;
+  if(CONFIG.BIZ_LICENCE) t += ctr("SFA Licence: " + CONFIG.BIZ_LICENCE) + LF;
+  t += ctr("Tel: " + CONFIG.BIZ_PHONE) + LF + LF;
+  t += BOLD_ON + ctr("RECEIPT") + BOLD_OFF + LF;
+  t += line + LF;
   t += row("Receipt No:", ref) + LF;
   t += row("Date:", d.toLocaleDateString("en-SG")) + LF;
   t += row("Time:", d.toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"})) + LF;
@@ -3955,8 +3974,8 @@ function buildReceiptText(o){
   if(o.remarks) t += "Remarks: " + o.remarks + LF;
   t += line + LF;
   t += "Received by: ____________________" + LF + LF;
-  t += ALIGN_C + "Thank you for your support!" + LF;
-  t += "Please keep this receipt" + LF;
+  t += ctr("Thank you for your support!") + LF;
+  t += ctr("Please keep this receipt") + LF;
   t += LF + LF;
   // Keep the control codes, strip anything the printer would misread
   return t.split("").map(ch=>{
