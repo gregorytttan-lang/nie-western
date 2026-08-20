@@ -428,6 +428,12 @@ const CONFIG = {
   MENU_KEY:     "menu_nie_v7",
   BREAKFAST_CUTOFF: 10 * 60 + 45,  // 10:45 AM in minutes
   RAWBT_PORT:   40213,
+  // Shown on customer receipts. Licensed hawker stall - no UEN, so the SFA
+  // licence number is the identifier a company will reference.
+  BIZ_NAME:     "NIE WESTERN FOOD",
+  BIZ_LICENCE:  "",              // <-- optional: your SFA licence number
+  BIZ_ADDR:     "NIE Canteen, Stall 4",
+  BIZ_PHONE:    "9062 8726",
 };
 // Aliases for backward compat
 const STAFF_PWD  = CONFIG.STAFF_PWD;
@@ -2235,6 +2241,7 @@ function renderKitchen(){
         ${order.status==="ready"?`<button onclick="confirmCollected('${order.id}')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#78716C;color:#fff;border-radius:9px">✓ Collected</button>`:""}
         <button onclick="openReply('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:${order.staffReply?"#EFF6FF":"#F5F3F0"};color:${order.staffReply?"#1E40AF":"#1C1917"};border:1px solid ${order.staffReply?"#93C5FD":"#E5E0D8"};border-radius:9px">💬 Reply</button>
         <button onclick="printTicket(orders.find(x=>x.id==='${order.id}'))" style="padding:11px 20px;font-size:22px;background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:9px">🖨️</button>
+        <button onclick="printReceiptById('${order.id}')" style="padding:11px 14px;font-size:13px;font-weight:700;background:#EFF6FF;color:#1E40AF;border:1px solid #93C5FD;border-radius:9px">🧾 Receipt</button>
         ${order.status!=="cancelled"?`<button onclick="confirmCancelOrder('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:9px">✕ Cancel</button>`:""}
       </div>
       ${order.paymentMethod==="cash"
@@ -2699,7 +2706,10 @@ function renderOrderList(){
           </div>
           <div style="font-size:11px;color:#78716C;margin-top:2px">${(o.items||[]).map(i=>`${i.qty}\u00d7${i.name}`).join(", ")}</div>
         </div>
-        <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#1C1917;margin-left:12px">${fmtS(o.total)}</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:12px;flex-shrink:0">
+          <span style="font-family:'Playfair Display',serif;font-weight:700;font-size:14px;color:#1C1917">${fmtS(o.total)}</span>
+          <button onclick="printReceiptById('${o.id}')" style="background:#EFF6FF;color:#1E40AF;border:1px solid #93C5FD;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:700">🧾</button>
+        </div>
       </div>`).join("");
 }
 
@@ -3783,6 +3793,78 @@ function buildTicketText(o){
 
   return t;
 }
+// A customer receipt, not a kitchen ticket. Itemised with unit prices, a
+// reference the customer can quote, and the business details their finance
+// team will ask for.
+function buildReceiptText(o){
+  const ESC='\x1B', GS='\x1D', LF='\n';
+  const NORMAL=ESC+'!'+'\x00', BOLD_ON=ESC+'E'+'\x01', BOLD_OFF=ESC+'E'+'\x00';
+  const DOUBLE_H=ESC+'!'+'\x10', ALIGN_C=ESC+'a'+'\x01', ALIGN_L=ESC+'a'+'\x00';
+  const CUT=GS+'V'+'\x42'+'\x00';
+  const W = 48;
+  const line = "-".repeat(W);
+  const row = (l,r)=>{ l=String(l); r=String(r);
+    const gap = Math.max(1, W - l.length - r.length);
+    return l + " ".repeat(gap) + r; };
+
+  const d = new Date(o.createdAt);
+  const ref = "R" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0")
+            + String(d.getDate()).padStart(2,"0") + "-" + String(o.queueNo||0).padStart(3,"0");
+
+  let t = ESC + 't' + '\x00';
+  t += ALIGN_C + BOLD_ON + DOUBLE_H + CONFIG.BIZ_NAME + LF + NORMAL + BOLD_OFF;
+  t += CONFIG.BIZ_ADDR + LF;
+  if(CONFIG.BIZ_LICENCE) t += "SFA Licence: " + CONFIG.BIZ_LICENCE + LF;
+  t += "Tel: " + CONFIG.BIZ_PHONE + LF + LF;
+  t += BOLD_ON + "RECEIPT" + BOLD_OFF + LF;
+  t += ALIGN_L + line + LF;
+  t += row("Receipt No:", ref) + LF;
+  t += row("Date:", d.toLocaleDateString("en-SG")) + LF;
+  t += row("Time:", d.toLocaleTimeString("en-SG",{hour:"2-digit",minute:"2-digit"})) + LF;
+  t += row("Queue No:", fmtQ(o.queueNo||0)) + LF;
+  t += line + LF;
+
+  const addons = c => Object.values(c.choices||{})
+    .flatMap(x=>Array.isArray(x)?x:[x])
+    .filter(x=>{const n=x.name||x; return n!=="No thanks" && n!=="None" && n!=="Wrap only";});
+
+  (o.items||[]).forEach(i=>{
+    const ex = Object.values(i.choices||{}).reduce((s,c)=>s+choicePrice(c),0);
+    const unit = (Number(i.price)||0) + ex;
+    t += row(i.qty + " x " + i.name, fmtS(unit * i.qty)) + LF;
+    addons(i).forEach(a=>{
+      const nm = (a.name||a).replace(/^\+\s*/,"");
+      t += row("    " + nm, a.price>0 ? ("+"+fmtS(a.price)) : "") + LF;
+    });
+  });
+
+  t += line + LF;
+  if(o.dining==="takeaway" && o.takeawayCharge>0){
+    t += row("Take-away packaging", fmtS(o.takeawayCharge)) + LF;
+  }
+  t += BOLD_ON + DOUBLE_H + row("TOTAL", fmtS(o.total)) + NORMAL + BOLD_OFF + LF;
+  t += line + LF;
+  t += row("Paid by:", o.paymentMethod==="cash" ? "CASH" : "PAYNOW") + LF;
+  t += row("Dining:", o.dining==="takeaway" ? "Take Away" : "Dine In") + LF;
+  if(o.remarks) t += "Remarks: " + o.remarks + LF;
+  t += line + LF;
+  t += "Received by: ____________________" + LF + LF;
+  t += ALIGN_C + "Thank you for your support!" + LF;
+  t += "Please keep this receipt" + LF;
+  t += LF + LF + CUT;
+  return t;
+}
+
+function printReceipt(o){
+  if(!o){ toast("Order not found", "#DC2626"); return; }
+  rawbtPrint(buildReceiptText(o));
+  toast("\U0001f9fe Printing receipt for " + fmtQ(o.queueNo||0), "#C4572A");
+}
+
+function printReceiptById(id){
+  printReceipt(orders.find(x=>x.id===id));
+}
+
 function printAllOrders(){
   const active = orders.filter(o=>o.status!=="collected");
   // Exclude snacks-only orders from printing
