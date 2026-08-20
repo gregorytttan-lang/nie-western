@@ -1144,8 +1144,11 @@ function printChefSlip(){
     t += "------------------------------------------------" + LF;
   });
   t += DOUBLE_H + BOLD_ON + "TOTAL: " + total + " pcs" + LF + NORMAL + BOLD_OFF;
-  t += "================================================" + LF + LF + CUT;
-  rawbtPrint(t);
+  t += "================================================" + LF + LF;
+  rawbtPrint(t.split("").map(ch=>{
+    const c = ch.charCodeAt(0);
+    return (c < 32 || c === 127) ? ch : ascii(ch);
+  }).join("") + CUT);
   toast("🖨️ Printing kitchen count...", "#C4572A");
 }
 
@@ -3524,7 +3527,7 @@ function printPayout(p){
   t += "Authorised by: ________________\n\n";
   t += "Signature:     ________________\n";
   t += "================================\n\n\n";
-  rawbtPrint(t);
+  rawbtPrint(ascii(t));
 }
 
 // ── MONTHLY ARCHIVE ──────────────────────────────────────────────────────────
@@ -3874,13 +3877,31 @@ function buildTicketText(o){
 
   // Feed and cut
   t += LF;
-  t += CUT;
 
-  return t;
+  // Strip anything outside plain ASCII, keeping the ESC/POS control bytes
+  return t.split("").map(ch=>{
+    const c = ch.charCodeAt(0);
+    return (c < 32 || c === 127) ? ch : ascii(ch);
+  }).join("") + CUT;
 }
 // A customer receipt, not a kitchen ticket. Itemised with unit prices, a
 // reference the customer can quote, and the business details their finance
 // team will ask for.
+// Thermal printers fall back to their own codepage for anything outside plain
+// ASCII. On a China-market printer that turns an em dash or a curly quote into
+// Chinese characters, which is what made receipts print as gibberish.
+// Everything sent to the printer goes through here first.
+function ascii(s){
+  return String(s == null ? "" : s)
+    .replace(/[\u2012-\u2015\u2212]/g, "-")     // dashes
+    .replace(/[\u2018\u2019\u201B]/g, "'")      // curly single quotes
+    .replace(/[\u201C\u201D]/g, '"')            // curly double quotes
+    .replace(/[\u00D7\u2715\u2716]/g, "x")      // multiplication sign
+    .replace(/\u2026/g, "...")
+    .replace(/[\u00A0\u2007\u202F]/g, " ")      // odd spaces
+    .replace(/[^\x20-\x7E\n]/g, "");            // drop anything else, incl. emoji
+}
+
 function buildReceiptText(o){
   const ESC='\x1B', GS='\x1D', LF='\n';
   const NORMAL=ESC+'!'+'\x00', BOLD_ON=ESC+'E'+'\x01', BOLD_OFF=ESC+'E'+'\x00';
@@ -3936,8 +3957,12 @@ function buildReceiptText(o){
   t += "Received by: ____________________" + LF + LF;
   t += ALIGN_C + "Thank you for your support!" + LF;
   t += "Please keep this receipt" + LF;
-  t += LF + LF + CUT;
-  return t;
+  t += LF + LF;
+  // Keep the control codes, strip anything the printer would misread
+  return t.split("").map(ch=>{
+    const c = ch.charCodeAt(0);
+    return (c < 32 || c === 127) ? ch : ascii(ch);
+  }).join("") + CUT;
 }
 
 function printReceipt(o){
