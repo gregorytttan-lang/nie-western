@@ -192,6 +192,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
         <div style="font-size:11px;color:#78716C;">(default 8080)</div>
       </div>
       <button id="bt-btn" onclick="connectPrinter()" style="background:#C4572A;color:#fff;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:600;width:100%;margin-bottom:10px">🖨️ Connect & Test Print</button>
+      <button onclick="printWidthTest()" style="background:#EFF6FF;color:#1E40AF;border:1px solid #93C5FD;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:600;width:100%;margin-bottom:10px">📏 Print Width Test</button>
       <div id="bt-status" style="font-size:12px;color:#78716C;margin-top:8px;text-align:center"></div>
     </div>
   </div>
@@ -432,7 +433,7 @@ const CONFIG = {
   // licence number is the identifier a company will reference.
   BIZ_NAME:     "NIE WESTERN FOOD",
   BIZ_LICENCE:  "",              // <-- optional: your SFA licence number
-  BIZ_ADDR:     "NIE Canteen, Stall 4",
+  BIZ_ADDR:     "NIE Canteen Stall 4",
   BIZ_PHONE:    "9062 8726",
   PAPER_CHARS:  48,              // 48 for 80mm paper, change to 32 for 58mm
 };
@@ -3903,6 +3904,10 @@ function ascii(s){
     .replace(/[^\x20-\x7E\n]/g, "");            // drop anything else, incl. emoji
 }
 
+// This printer renders the "$" byte as a yen sign, so receipts spell the
+// currency out instead. Letters cannot be misread by any codepage.
+function money(n){ return "SGD " + Number(n).toFixed(2); }
+
 function buildReceiptText(o){
   const ESC='\x1B', GS='\x1D', LF='\n';
   const NORMAL=ESC+'!'+'\x00', BOLD_ON=ESC+'E'+'\x01', BOLD_OFF=ESC+'E'+'\x00';
@@ -3956,18 +3961,18 @@ function buildReceiptText(o){
   (o.items||[]).forEach(i=>{
     const ex = Object.values(i.choices||{}).reduce((s,c)=>s+choicePrice(c),0);
     const unit = (Number(i.price)||0) + ex;
-    t += row(i.qty + " x " + i.name, fmtS(unit * i.qty)) + LF;
+    t += row(i.qty + " x " + i.name, money(unit * i.qty)) + LF;
     addons(i).forEach(a=>{
       const nm = (a.name||a).replace(/^\+\s*/,"");
-      t += row("    " + nm, a.price>0 ? ("+"+fmtS(a.price)) : "") + LF;
+      t += row("    " + nm, a.price>0 ? ("+"+money(a.price)) : "") + LF;
     });
   });
 
   t += line + LF;
   if(o.dining==="takeaway" && o.takeawayCharge>0){
-    t += row("Take-away packaging", fmtS(o.takeawayCharge)) + LF;
+    t += row("Take-away packaging", money(o.takeawayCharge)) + LF;
   }
-  t += BOLD_ON + DOUBLE_H + row("TOTAL", fmtS(o.total)) + NORMAL + BOLD_OFF + LF;
+  t += BOLD_ON + DOUBLE_H + row("TOTAL", money(o.total)) + NORMAL + BOLD_OFF + LF;
   t += line + LF;
   t += row("Paid by:", o.paymentMethod==="cash" ? "CASH" : "PAYNOW") + LF;
   t += row("Dining:", o.dining==="takeaway" ? "Take Away" : "Dine In") + LF;
@@ -4018,6 +4023,23 @@ function printTicket(o, isAuto=false){
     return;
   }
   rawbtPrint(buildTicketText(o), isAuto);
+}
+
+// Prints a numbered ruler. Whatever number the line ends on is how many
+// characters this printer fits - that is the value for PAPER_CHARS.
+function printWidthTest(){
+  let s = "";
+  for(let i=1;i<=60;i++) s += String(i%10);
+  let t = "";
+  t += "WIDTH TEST\n";
+  t += "Count where the line stops:\n";
+  t += s + "\n";
+  t += "----+----1----+----2----+----3\n";
+  t += "123456789012345678901234567890123456789012345678\n";
+  t += "(48 chars = 80mm, 32 chars = 58mm)\n";
+  t += "Currency check:  SGD 12.50  $12.50\n\n\n";
+  rawbtPrint(t);
+  toast("Printing width test", "#C4572A");
 }
 
 function connectPrinter(){
