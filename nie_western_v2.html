@@ -1634,7 +1634,28 @@ function renderCartModal(){
 }
 
 // ── PAYMENT ──────────────────────────────────────────────────────────────────
+let payInFlight = false;
+
 async function proceedToPayment(){
+  if(!cart.length) return;
+  // This now claims a queue number and writes a draft, which takes a moment on
+  // a slow connection. Without a guard a second tap claimed a SECOND number
+  // and saved a SECOND order - one customer, two queue numbers.
+  if(payInFlight) return;
+  payInFlight = true;
+  const payBtn = document.getElementById("pay-now-btn");
+  if(payBtn){ payBtn.disabled = true; payBtn.textContent = "Please wait..."; payBtn.style.opacity = "0.6"; }
+  try{
+    await proceedToPaymentInner();
+  } catch(e){
+    showError("Could not start payment", e);
+  } finally {
+    payInFlight = false;
+    if(payBtn){ payBtn.disabled = false; payBtn.textContent = "Pay Now \u2192"; payBtn.style.opacity = "1"; }
+  }
+}
+
+async function proceedToPaymentInner(){
   if(!cart.length) return;
   // Skip dining option for snacks-only orders
   if(isSnacksOnly()){
@@ -1732,6 +1753,15 @@ async function proceedToPayment(){
 function closePayment(){
   // Backed out without paying — return the held portions to the pool
   if(reservedSpecialQty > 0){ releaseSpecial(reservedSpecialQty); reservedSpecialQty = 0; }
+  // Remove the unpaid draft straight away rather than leaving it for the
+  // hourly purge, so it can never be mistaken for a real order.
+  if(pendingOrder && pendingOrder.id && pendingOrder.saved){
+    const id = pendingOrder.id;
+    ordersRef.child(id).once("value").then(s=>{
+      const o = s.val();
+      if(o && o.status === "pending") ordersRef.child(id).remove();
+    }).catch(()=>{});
+  }
   const m = document.getElementById("pay-modal");
   m.classList.add("hidden"); m.style.display="none";
   pendingOrder = null;
@@ -1749,8 +1779,12 @@ function resetPayButtons(){
   if(bc){ bc.textContent="💵 Pay by Cash at Counter";        bc.disabled=false; bc.style.opacity="1"; }
 }
 
+let confirmInFlight = false;
+
 async function confirmPayment(paymentMethod='paynow'){
-  if(!pendingOrder){ resetPayButtons(); return; }   // never leave them stuck
+  if(!pendingOrder){ resetPayButtons(); return; }
+  if(confirmInFlight) return;        // double tap must not create a second order
+  confirmInFlight = true;   // never leave them stuck
   // Paid — the reservation is now consumed, don't let closePayment refund it
   const heldSpecial = reservedSpecialQty;
   reservedSpecialQty = 0;
@@ -1768,6 +1802,7 @@ async function confirmPayment(paymentMethod='paynow'){
     finished = true;
     clearTimeout(watchdog);
     if(heldSpecial > 0) releaseSpecial(heldSpecial);
+    confirmInFlight = false;
     resetPayButtons();
     console.error("confirmPayment failed:", err);
     // Be explicit. A vague toast here is how an order goes missing quietly.
@@ -1874,6 +1909,7 @@ async function confirmPayment(paymentMethod='paynow'){
   renderMenu();
   updateKitchenBadge();
   finished = true; clearTimeout(watchdog);
+  confirmInFlight = false;
   }catch(err){ unstick(err); }
 }
 
@@ -2243,6 +2279,17 @@ function renderKitchen(){
         <div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${isTakeAway?"#B45309":st.color};line-height:1">${fmtQ(order.queueNo)}</div>
+            ${(function(){
+              // Same items, same minute, different number: almost certainly one
+              // customer whose tap was registered twice.
+              const sig = (order.items||[]).map(i=>i.qty+"x"+i.name).sort().join("|");
+              const twin = orders.filter(o=>o.id!==order.id && o.status!=="cancelled" && o.status!=="pending"
+                && Math.abs(o.createdAt-order.createdAt) < 120000
+                && (o.items||[]).map(i=>i.qty+"x"+i.name).sort().join("|") === sig);
+              return twin.length
+                ? `<div style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">\u26a0\ufe0f possible duplicate of ${twin.map(x=>fmtQ(x.queueNo)).join(", ")}</div>`
+                : "";
+            })()}
             ${(function(){
               const dup = orders.filter(o=>o.queueNo===order.queueNo && o.status!=="cancelled"
                 && new Date(o.createdAt).toDateString()===new Date(order.createdAt).toDateString());
