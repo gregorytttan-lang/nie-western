@@ -1111,7 +1111,7 @@ function proteinTally(list){
   const out = {};
   Object.keys(PROTEIN_MAP).forEach(k=>{ out[k] = 0; });
   (list||[]).forEach(o=>{
-    if(!o || o.status === "cancelled" || !o.items) return;
+    if(!o || o.status === "cancelled" || o.status === "pending" || !o.items) return;
     o.items.forEach(i=>{
       const id = i.baseId || i.id;          // baseId covers Today's Special
       for(const k in PROTEIN_MAP){
@@ -1124,7 +1124,8 @@ function proteinTally(list){
 
 function todaysOrdersForChef(){
   const t = today();
-  return orders.filter(o=>o && new Date(o.createdAt).toDateString() === t && o.status !== "cancelled");
+  return orders.filter(o=>o && new Date(o.createdAt).toDateString() === t
+    && o.status !== "cancelled" && o.status !== "pending");
 }
 
 function printChefSlip(){
@@ -1716,6 +1717,16 @@ async function proceedToPayment(){
   new QRCode(qrWrap, {text: qrString, width: 180, height: 180, colorDark:"#000000", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M});
   const m = document.getElementById("pay-modal");
   m.classList.remove("hidden"); m.style.display="block";
+
+  // Write the order to the server NOW, while the customer is still connected.
+  // They are about to switch to their bank app, which suspends this page and
+  // drops the Firebase socket - trying to send the whole order after they come
+  // back is what left them stuck on "Processing".
+  const draft = {...pendingOrder, queueNo: pendingOrder.claimedQ || 0,
+                 status:"pending", needsKitchen: orderNeedsKitchen()};
+  saveOrderConfirmed(draft)
+    .then(()=>{ pendingOrder.saved = true; })
+    .catch(e=>{ console.warn("draft save failed, will retry on confirm", e); });
 }
 
 function closePayment(){
@@ -1765,7 +1776,7 @@ async function confirmPayment(paymentMethod='paynow'){
       + "If you have already paid, show this screen and your payment to our staff at the counter.");
   };
   // Hard stop: whatever happens, the customer is never left on "Processing"
-  const watchdog = setTimeout(()=>unstick(new Error("timed out after 15s")), 15000);
+  const watchdog = setTimeout(()=>unstick(new Error("timed out")), 25000);
   try{
 
   const needsKitchen = orderNeedsKitchen();
@@ -1775,7 +1786,12 @@ async function confirmPayment(paymentMethod='paynow'){
   // Snacks-only: no queue number, no kitchen, just thank you
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
-    await saveOrderConfirmed(o);   // must be on the server before we thank them
+    delete o.saved;
+    if(pendingOrder.saved){
+      await ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt, snacksOnly:true, needsKitchen:false, queueNo:0});
+    } else {
+      await saveOrderConfirmed(o);
+    }
     orders.push(o);
     // Send directly to Google Sheets immediately (most reliable for snacks)
     try {
@@ -1810,8 +1826,14 @@ async function confirmPayment(paymentMethod='paynow'){
     // Normal flow: use the number claimed when the payment screen opened
     const queueNo = pendingOrder.claimedQ || await nextQ();
     o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
-    // Do not hand out a queue number until the kitchen can actually see it
-    await saveOrderConfirmed(o);
+    delete o.saved;
+    if(pendingOrder.saved){
+      // Already on the server - just flip it to paid. A few bytes, so it goes
+      // through even on a connection that is still waking up.
+      await ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt});
+    } else {
+      await saveOrderConfirmed(o);   // draft never landed, send the whole thing
+    }
     orders.push(o);
     cart = []; pendingOrder = null;
     closePayment();
@@ -1994,7 +2016,7 @@ function doFindOrder2(){
   const t = today();
   const match = orders.find(o=>
     o && o.queueNo === q
-    && o.status !== "cancelled"
+    && o.status !== "cancelled" && o.status !== "pending"
     && new Date(o.createdAt).toDateString() === t
     && Math.abs(Number(o.total) - amt) < 0.005
   );
@@ -2138,11 +2160,21 @@ function confirmCollected(id){
 // brings two customers to the counter. Renumber the later one immediately,
 // before the chef calls it.
 let fixingDupes = false;
+// Someone opened the payment screen and walked away. Clear the draft after an
+// hour so it never clutters the kitchen or the books.
+function purgeStaleDrafts(){
+  if(!ordersLive) return;
+  const cutoff = Date.now() - 60*60*1000;
+  orders.filter(o=>o && o.status === "pending" && o.createdAt < cutoff)
+        .forEach(o=>{ ordersRef.child(o.id).remove().catch(()=>{}); });
+}
+
 function resolveDuplicateQueueNos(){
   if(fixingDupes || !ordersLive) return;   // staff screens only
   const t = today();
   const live = orders.filter(o=>o && o.queueNo > 0 && o.status !== "cancelled"
-    && o.status !== "collected" && new Date(o.createdAt).toDateString() === t);
+    && o.status !== "collected" && o.status !== "pending"
+    && new Date(o.createdAt).toDateString() === t);
   const byNo = {};
   live.forEach(o=>{ (byNo[o.queueNo] = byNo[o.queueNo] || []).push(o); });
   const clashes = Object.keys(byNo).filter(n=>byNo[n].length > 1);
@@ -2177,7 +2209,8 @@ function updateKitchenBadge(){
 function renderKitchen(){
   // Only orders explicitly flagged as no-kitchen are hidden. Older orders saved
   // without the flag default to visible — fail safe rather than silently vanish.
-  const needsKitchenCheck = o => o.needsKitchen !== false;
+  // "pending" = payment screen opened but not confirmed. Not a real order yet.
+  const needsKitchenCheck = o => o.needsKitchen !== false && o.status !== "pending";
   const queue = orders.filter(o=>o.status!=="collected" && (needsKitchenCheck(o)||o.status==="cancelled")).sort((a,b)=>a.createdAt-b.createdAt);
   const tags  = document.getElementById("kitchen-tags");
   const n1 = orders.filter(o=>o.status==="paid").length;
@@ -2620,7 +2653,7 @@ function renderMenuPerf(){
   const el = document.getElementById("menu-perf");
   if(!el) return;
   const cutoff = menuPerfDays ? Date.now() - menuPerfDays*86400000 : 0;
-  const list = orders.filter(o=>o && o.status !== "cancelled" && o.createdAt >= cutoff);
+  const list = orders.filter(o=>o && o.status !== "cancelled" && o.status !== "pending" && o.createdAt >= cutoff);
   if(!list.length){ el.innerHTML = "<div style='color:#78716C;font-size:13px'>No sales data yet.</div>"; return; }
 
   const m = {};
@@ -2679,7 +2712,7 @@ function renderRushChart(){
   const el = document.getElementById("rush-chart");
   if(!el) return;
   const t = today();
-  const list = orders.filter(o=>o && o.status !== "cancelled"
+  const list = orders.filter(o=>o && o.status !== "cancelled" && o.status !== "pending"
     && (rushAllDays || new Date(o.createdAt).toDateString() === t));
   if(!list.length){ el.innerHTML = "<div style='color:#78716C;font-size:13px'>No orders yet.</div>"; return; }
 
@@ -2798,7 +2831,7 @@ function renderReports(){
   const localSnacks = ls("snacks_orders_nie", []);
   const allOrders = [...orders];
   localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
-  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status!=="cancelled");
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status!=="cancelled" && o.status!=="pending");
   const cancelledToday = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status==="cancelled").length;
   const todayRev      = todayOrders.reduce((s,o)=>s+o.total,0);
   const todayPaynow   = todayOrders.filter(o=>o.paymentMethod!=="cash").reduce((s,o)=>s+o.total,0);
@@ -3308,7 +3341,7 @@ function doSaveDailyToSheets(dayKey){
   const localSnacks = ls("snacks_orders_nie", []);
   const allOrders = [...orders];
   localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
-  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status!=="pending");
   if(!todayOrders.length){ toast("No orders today to save.","#78716C"); return; }
 
   // Disable button and show loading
@@ -3391,7 +3424,7 @@ function sendWhatsApp(){
   const localSnacks = ls("snacks_orders_nie", []);
   const allOrders = [...orders];
   localSnacks.forEach(lo => { if(!allOrders.find(o=>o.id===lo.id)) allOrders.push(lo); });
-  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr);
+  const todayOrders = allOrders.filter(o=>new Date(o.createdAt).toDateString()===todayStr && o.status!=="pending");
   const todayRev = todayOrders.reduce((s,o)=>s+o.total,0);
   const itemMap = {};
   todayOrders.forEach(o=>o.items.forEach(i=>{
@@ -4386,6 +4419,7 @@ function handleOrdersSnapshot(snap){
   isFirstLoad = false;
 
   resolveDuplicateQueueNos();   // never let two live orders share a number
+  purgeStaleDrafts();
   renderMenu();
   renderKitchen();
   updateKitchenBadge();
@@ -4454,6 +4488,14 @@ function startAudioKeepAlive(){
 async function requestDisplayWakeLock(){
   try{ if("wakeLock" in navigator) wakeLockRef = await navigator.wakeLock.request("screen"); }catch(e){}
 }
+// Coming back from the bank app: reconnect straight away rather than waiting
+// for Firebase to notice on its own.
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible"){
+    try{ firebase.database().goOnline(); }catch(e){}
+  }
+});
+
 document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState === "visible" && isDisplayMode){
     requestDisplayWakeLock();
