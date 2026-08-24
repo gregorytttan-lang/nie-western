@@ -1791,8 +1791,13 @@ async function confirmPayment(paymentMethod='paynow'){
   // Show loading state
   const btn1 = document.querySelector("button[onclick=\"confirmPayment('paynow')\"]");
   const btn2 = document.querySelector("button[onclick=\"confirmPayment('cash')\"]");
-  if(btn1){ btn1.textContent="⏳ Processing..."; btn1.disabled=true; }
-  if(btn2){ btn2.textContent="⏳ Processing..."; btn2.disabled=true; }
+  if(btn1){ btn1.textContent="⏳ Sending your order..."; btn1.disabled=true; }
+  if(btn2){ btn2.textContent="⏳ Sending your order..."; btn2.disabled=true; }
+  // A silent button for 20 seconds looks broken, and a customer who thinks it
+  // is broken orders again somewhere else.
+  const slowNote = setTimeout(()=>{
+    if(btn1 && btn1.disabled) btn1.textContent = fbOnline ? "⏳ Still sending, please wait..." : "📶 Waiting for signal...";
+  }, 4000);
 
   // If anything below throws, the buttons must come back — a customer stuck
   // on "Processing" after paying is the worst possible failure.
@@ -1801,14 +1806,34 @@ async function confirmPayment(paymentMethod='paynow'){
     if(finished) return;
     finished = true;
     clearTimeout(watchdog);
+    clearTimeout(slowNote);
     if(heldSpecial > 0) releaseSpecial(heldSpecial);
     confirmInFlight = false;
     resetPayButtons();
     console.error("confirmPayment failed:", err);
-    // Be explicit. A vague toast here is how an order goes missing quietly.
-    alert("\u26a0\ufe0f ORDER NOT SENT\n\nWe could not reach the kitchen \u2014 your order has NOT been placed.\n\n"
-      + "Please check your internet and tap the button again.\n\n"
-      + "If you have already paid, show this screen and your payment to our staff at the counter.");
+    if(!fbOnline){
+      // Firebase keeps the write and delivers it when signal returns. Telling
+      // the customer it failed is what made them re-order on another phone -
+      // then both orders arrived and the stall cooked two for one payment.
+      const oid = pendingOrder && pendingOrder.id;
+      const ok = confirm(
+        "\ud83d\udcf6 NO INTERNET RIGHT NOW\n\n"
+        + "Your order is saved on this phone and will be sent automatically the moment your signal returns.\n\n"
+        + "\u26a0\ufe0f Please do NOT order again on another phone - you would be charged twice.\n\n"
+        + "Move to a spot with better signal and wait a moment.\n\n"
+        + "Press OK to keep waiting, or Cancel to cancel this order completely.");
+      if(ok && oid){ watchLateDelivery(oid); }
+      if(!ok && oid){
+        // Queued after the pending write, so it flushes straight after it and
+        // removes the order rather than leaving a ghost on the kitchen screen.
+        try{ ordersRef.child(oid).remove(); }catch(e){}
+        toast("Order cancelled", "#78716C");
+      }
+    } else {
+      alert("\u26a0\ufe0f ORDER NOT SENT\n\nWe could not reach the kitchen \u2014 your order has NOT been placed.\n\n"
+        + "Please check your internet and tap the button again.\n\n"
+        + "If you have already paid, show this screen and your payment to our staff at the counter.");
+    }
   };
   // Hard stop: whatever happens, the customer is never left on "Processing"
   const watchdog = setTimeout(()=>unstick(new Error("timed out")), 25000);
@@ -1908,7 +1933,7 @@ async function confirmPayment(paymentMethod='paynow'){
   m.classList.remove("hidden"); m.style.display="flex";
   renderMenu();
   updateKitchenBadge();
-  finished = true; clearTimeout(watchdog);
+  finished = true; clearTimeout(watchdog); clearTimeout(slowNote);
   confirmInFlight = false;
   }catch(err){ unstick(err); }
 }
@@ -4440,6 +4465,10 @@ setInterval(()=>{
 // subscribe to the whole orders list, so each new order was re-sent in full to
 // every connected phone - which is what made writes crawl during the rush.
 let ordersLive = false;
+let fbOnline = true;
+try{
+  db.ref(".info/connected").on("value", s=>{ fbOnline = !!s.val(); });
+}catch(e){}
 
 function handleOrdersSnapshot(snap){
   const data = snap.val();
@@ -4472,6 +4501,27 @@ function handleOrdersSnapshot(snap){
   updateKitchenBadge();
   renderReports();
   renderDisplay();
+}
+
+// A write that was queued while offline flushes when signal returns. Watch for
+// it so the customer gets their queue number instead of being left guessing.
+function watchLateDelivery(orderId){
+  const ref = ordersRef.child(orderId);
+  const h = ref.on("value", snap=>{
+    const o = snap.val();
+    if(o && o.status && o.status !== "pending"){
+      ref.off("value", h);
+      toast("\u2705 Your order went through - queue " + fmtQ(o.queueNo), "#16A34A");
+      try{
+        document.getElementById("queue-number").textContent = fmtQ(o.queueNo);
+        const m = document.getElementById("queue-modal");
+        m.classList.remove("hidden"); m.style.display="flex";
+        updateStatusUI(o.status);
+        startTrackingOrder(orderId);
+        saveActiveOrder(o);
+      }catch(e){}
+    }
+  });
 }
 
 // Customer devices: one read at startup so Find My Order and the queue-number
