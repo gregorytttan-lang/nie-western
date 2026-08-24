@@ -272,6 +272,10 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <div id="cart-items"></div>
     <div style="margin-top:16px;padding:16px;background:#F5F3F0;border-radius:12px;border:1px solid #E5E0D8">
       <div style="font-size:12px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Special Remarks (Optional)</div>
+      <div id="remarks-warn" style="display:none;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:12px;color:#92400E;font-weight:600">
+        \u26a0\ufe0f There is a note below \u2014 check it belongs to this order.
+        <button onclick="clearRemarks();updateRemarksWarn()" style="background:#DC2626;color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;margin-left:6px">Clear it</button>
+      </div>
       <textarea id="order-remarks" placeholder="e.g. No sauce, less spicy, no onions..." style="width:100%;padding:10px 12px;border:1px solid #E5E0D8;border-radius:8px;font-size:13px;background:#fff;outline:none;resize:none;height:70px;font-family:'DM Sans',sans-serif;color:#1C1917"></textarea>
     </div>
     <div id="dining-section" style="margin-top:16px;padding:16px;background:#F5F3F0;border-radius:12px;border:1px solid #E5E0D8" id="dining-wrapper">
@@ -1355,6 +1359,22 @@ function setDining(opt){
 
 function cartCount(){ return cart.reduce((s,x)=>s+x.qty,0); }
 
+// The remarks box was read when an order was placed but never emptied, so on
+// a shared tablet an old note like "collect at 3pm" silently attached itself
+// to the next customer's order and the kitchen held their food.
+function clearRemarks(){
+  const el = document.getElementById("order-remarks");
+  if(el) el.value = "";
+  updateRemarksWarn();
+}
+
+function updateRemarksWarn(){
+  const el = document.getElementById("order-remarks");
+  const w  = document.getElementById("remarks-warn");
+  if(!el || !w) return;
+  w.style.display = el.value.trim() ? "block" : "none";
+}
+
 function updateCartFab(){
   const fab = document.getElementById("cart-fab");
   const cnt = cartCount();
@@ -1578,8 +1598,10 @@ function skipSides(){
 // ── CART ─────────────────────────────────────────────────────────────────────
 function openCart(){
   diningOption = null;
+  if(!cart.length) clearRemarks();   // fresh basket, no leftover note
   renderCartModal();
   updateTakeawayFeeLabel();
+  updateRemarksWarn();
   // Always re-check dining option visibility
   const dw = document.getElementById("dining-wrapper");
   const payBtn = document.getElementById("pay-now-btn");
@@ -1606,6 +1628,7 @@ function clearCartAndClose(){
   if(!confirm("Clear all items and go back to menu?")) return;
   cart = [];
   diningOption = null;
+  clearRemarks();
   closeCart();
   renderMenu();
 }
@@ -1885,6 +1908,7 @@ async function confirmPayment(paymentMethod='paynow'){
       fetch(SHEETS_URL, {method:"POST", body:JSON.stringify(snacksData)}).catch(()=>{});
     } catch(e){}
     cart = []; pendingOrder = null;
+    clearRemarks();
     closePayment();
     document.getElementById("queue-number").textContent = "🎉";
     document.getElementById("queue-dining").textContent = "Thank You!";
@@ -1907,6 +1931,7 @@ async function confirmPayment(paymentMethod='paynow'){
     });
     orders.push(o);
     cart = []; pendingOrder = null;
+    clearRemarks();
     closePayment();
     document.getElementById("queue-number").textContent = fmtQ(queueNo);
     document.getElementById("queue-dining").textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
@@ -2119,6 +2144,7 @@ function closeQueue(){
   cart = [];
   pendingOrder = null;
   diningOption = null;
+  clearRemarks();
   curCat = 0;
   renderMenu();
   updateCartFab();
