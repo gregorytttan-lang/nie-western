@@ -671,7 +671,7 @@ function ls(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}c
 function lss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 
 // Highest queue number actually issued today, read from the synced orders
-// list. This is the safety net for the counter — it cannot go backwards.
+// list. Used only to repair the counter, never to invent a number.
 function todayQueueMax(){
   const t = today();
   return orders.reduce((m,o)=>{
@@ -681,53 +681,53 @@ function todayQueueMax(){
   }, 0);
 }
 
-// Used only when Firebase will not answer. Never fall back to a per-device
-// counter: every customer phone starts that at zero, so it hands out #001
-// while the stall is really on #045 — and two phones offline at once both
-// get #001. The orders list is already synced, so the highest number issued
-// today is a far safer basis.
-// Last resort only. Three phones ordering in the same second all read the
-// same maximum here, which is how three orders ended up sharing one number.
-// The offset makes each device pick a different one instead of colliding.
-function fallbackQ(){
-  return todayQueueMax() + 1;
-}
-
+// A queue number comes from one place only: an atomic transaction on the
+// shared counter. The old code fell back to "highest I can see + 1" when the
+// counter was unreachable - and two phones offline at the same moment both
+// computed the same answer. That was the duplicate. There is no fallback now:
+// if the counter cannot be reached the order is saved with no number and the
+// number is filled in the moment the connection returns.
 function nextQ(){
-  return new Promise((resolve)=>{
-    const t = today();
-    const qRef = db.ref("queue/" + t);
-    let resolved = false;
-    const done = n => {
-      if(resolved) return;
-      resolved = true;
-      clearTimeout(timer);
-      resolve(n);
-    };
-    // 8s, not 3s. The customer is already looking at "Processing…", and a
-    // slow reply is much better than a duplicate queue number.
-    const timer = setTimeout(()=>done(fallbackQ()), 8000);
-    // One retry before giving up. A transaction can fail simply because two
-    // phones hit it together, and that case must not fall through to the
-    // fallback - that is how three orders ended up sharing number 24.
-    let tries = 0;
+  return new Promise(resolve=>{
+    const qRef = db.ref("queue/" + today());
+    let tries = 0, settled = false;
+    const finish = n => { if(!settled){ settled = true; resolve(n); } };
+
     const attempt = ()=>{
-    qRef.transaction(current=>{
-      // If the counter node was cleared or is behind, recover from the real
-      // orders rather than restarting at 1.
-      return Math.max(current || 0, todayQueueMax()) + 1;
-    }, (err, committed, snap)=>{
-      if(committed && snap && snap.val()){ done(snap.val()); return; }
-      if(++tries < 3){ setTimeout(attempt, 350); return; }   // try again before falling back
-      // Still no counter. Say so loudly - a silent fallback can hand two
-      // customers the same number.
-      showError("Queue number unreliable - check Firebase rules for 'queue'",
-                err || new Error("counter unavailable"));
-      done(fallbackQ());
-    });
+      qRef.transaction(cur=>Math.max(cur || 0, todayQueueMax()) + 1,
+        (err, committed, snap)=>{
+          if(committed && snap && snap.val()){ finish(snap.val()); return; }
+          if(++tries < 4){ setTimeout(attempt, 400); return; }
+          finish(0);   // 0 = no number yet, assigned later. NEVER a guess.
+        });
     };
     attempt();
+    // Give it a fair chance before letting the customer move on
+    setTimeout(()=>finish(0), 9000);
   });
+}
+
+// Fill in a number that could not be issued at the time of payment.
+function assignQueueLater(orderId){
+  const qRef = db.ref("queue/" + today());
+  let stop = false;
+  const tryOnce = ()=>{
+    if(stop) return;
+    qRef.transaction(cur=>Math.max(cur || 0, todayQueueMax()) + 1,
+      (err, committed, snap)=>{
+        if(committed && snap && snap.val()){
+          stop = true;
+          const n = snap.val();
+          ordersRef.child(orderId).update({queueNo:n}).catch(()=>{});
+          const el = document.getElementById("queue-number");
+          if(el && trackingOrderId === orderId) el.textContent = fmtQ(n);
+          toast("Your queue number is " + fmtQ(n), "#16A34A");
+        } else {
+          setTimeout(tryOnce, 3000);
+        }
+      });
+  };
+  tryOnce();
 }
 
 const SOUP = {id:"soup",label:"Add Mushroom Soup? (+$1.90)",required:true,options:[{name:"No thanks",price:0},{name:"+ Mushroom Soup",price:1.90}]};
@@ -1732,21 +1732,15 @@ async function proceedToPaymentInner(){
     reservedSpecialQty = granted;
   }
 
-  // Refresh the order list first: without the live feed this device may be
-  // holding a stale maximum, which the fallback relies on.
+  // Refresh the order list so the counter repair has accurate data
   try{
     const snap = await ordersRef.once("value");
     const d = snap.val();
     if(d) orders = Object.values(d);
   }catch(e){}
 
-  // Claim the queue number now, while the customer still has the QR to scan.
-  // Doing it at "I Have Paid" meant every phone hit the counter in the same
-  // instant during the rush, which is how numbers ended up duplicated.
-  const claimedQ = await nextQ();
-
   const remarks = document.getElementById("order-remarks").value.trim();
-  pendingOrder = {id:uid(), claimedQ, items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
+  pendingOrder = {id:uid(), items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
   closeCart();
   // Render pay modal items
   const addons = c => Object.values(c.choices||{}).flatMap(x=>Array.isArray(x)?x:[x]).filter(x=>{const n=x.name||x;return n!=="No thanks"&&n!=="None";});
@@ -1918,8 +1912,9 @@ async function confirmPayment(paymentMethod='paynow'){
     const trackBar = document.getElementById("order-tracking-bar");
     if(trackBar) trackBar.style.display="none";
   } else {
-    // Normal flow: use the number claimed when the payment screen opened
-    const queueNo = pendingOrder.claimedQ || await nextQ();
+    // Claimed now, at the moment of payment, so an abandoned basket never
+    // burns a number and the sequence has no gaps.
+    const queueNo = await nextQ();
     o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
     delete o.saved;
     // Send it, but do not block the customer on a server acknowledgement.
@@ -1933,7 +1928,13 @@ async function confirmPayment(paymentMethod='paynow'){
     cart = []; pendingOrder = null;
     clearRemarks();
     closePayment();
-    document.getElementById("queue-number").textContent = fmtQ(queueNo);
+    document.getElementById("queue-number").textContent = queueNo ? fmtQ(queueNo) : "\u2026";
+    if(!queueNo){
+      // Counter unreachable. The order is saved; the number follows shortly.
+      const lbl = document.getElementById("queue-no-label");
+      if(lbl) lbl.textContent = "Queue number coming\u2026";
+      assignQueueLater(o.id);
+    }
     document.getElementById("queue-dining").textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
     updateStatusUI("paid");
     startTrackingOrder(o.id);
@@ -2340,7 +2341,8 @@ function renderKitchen(){
       <div style="background:${isTakeAway?"#FEF3C7":st.bg};padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
         <div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${isTakeAway?"#B45309":st.color};line-height:1">${fmtQ(order.queueNo)}</div>
+            <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${isTakeAway?"#B45309":st.color};line-height:1">${order.queueNo ? fmtQ(order.queueNo) : "\u2014"}</div>
+            ${!order.queueNo?`<div style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">number assigning\u2026</div>`:""}
             ${(function(){
               // Same items, same minute, different number: almost certainly one
               // customer whose tap was registered twice.
@@ -2531,7 +2533,40 @@ function adminTab(t){
   if(t==="reports")   renderReports();
 }
 
-function renderAdmin(){ adminTab("menu-mgmt"); renderStallStatus(); }
+function renderAdmin(){ adminTab("menu-mgmt"); renderStallStatus(); checkQueueCounter(); }
+
+// Is the shared counter actually working? If it is not, every order has to
+// wait for its number, so this needs to be visible rather than silent.
+function checkQueueCounter(){
+  const bar = document.getElementById("stall-status-bar");
+  if(!bar) return;
+  db.ref("queue/" + today()).once("value")
+    .then(snap=>{
+      const v = snap.val();
+      const mx = todayQueueMax();
+      const ok = (v !== null && v !== undefined);
+      let msg, colour;
+      if(!ok){
+        msg = "\u26a0\ufe0f Queue counter not found for today - it will be created on the first order.";
+        colour = "#92400E";
+      } else if(v < mx){
+        msg = "\u26a0\ufe0f Counter is behind (" + v + " vs highest issued " + mx + ") - repairing automatically.";
+        colour = "#92400E";
+        db.ref("queue/" + today()).transaction(c=>Math.max(c||0, mx));
+      } else {
+        msg = "\u2713 Queue counter healthy - last number issued: " + fmtQ(v);
+        colour = "#166534";
+      }
+      const d = document.createElement("div");
+      d.id = "q-health";
+      d.style.cssText = "font-size:12px;font-weight:600;color:"+colour+";margin-top:8px";
+      d.textContent = msg;
+      const old = document.getElementById("q-health");
+      if(old) old.remove();
+      bar.parentNode.insertBefore(d, bar.nextSibling);
+    })
+    .catch(e=>showError("Queue counter", e));
+}
 
 function renderSpecialAdmin(){
   const s = special || {};
