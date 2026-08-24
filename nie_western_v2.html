@@ -1655,8 +1655,33 @@ async function proceedToPayment(){
   }
 }
 
+// An identical basket already ordered in the last few minutes is almost
+// always the same customer trying again because the first attempt looked
+// like it failed. Catch it before it becomes a second meal to cook.
+function recentIdenticalOrder(){
+  const sig = cart.map(i=>i.qty+"x"+i.id).sort().join("|");
+  const total = cartTotal().toFixed(2);
+  const cutoff = Date.now() - 5*60*1000;
+  return orders.find(o=>o && o.createdAt > cutoff && o.status !== "cancelled"
+    && Number(o.total).toFixed(2) === total
+    && (o.items||[]).map(i=>i.qty+"x"+i.id).sort().join("|") === sig);
+}
+
 async function proceedToPaymentInner(){
   if(!cart.length) return;
+
+  const twin = recentIdenticalOrder();
+  if(twin){
+    const mins = Math.max(1, Math.round((Date.now() - twin.createdAt)/60000));
+    const again = confirm(
+      "\u26a0\ufe0f THIS LOOKS LIKE A REPEAT\n\n"
+      + "The same order was already placed " + mins + " minute" + (mins>1?"s":"") + " ago"
+      + (twin.queueNo ? (" - queue " + fmtQ(twin.queueNo)) : "")
+      + ".\n\nIf your first attempt looked like it failed, it probably went through.\n"
+      + "Ordering again means paying twice.\n\n"
+      + "Press Cancel to go back, or OK only if you really want another one.");
+    if(!again) return;
+  }
   // Skip dining option for snacks-only orders
   if(isSnacksOnly()){
     diningOption = 'dinein';  // default, won't be shown
@@ -1745,8 +1770,9 @@ async function proceedToPaymentInner(){
   // back is what left them stuck on "Processing".
   const draft = {...pendingOrder, queueNo: pendingOrder.claimedQ || 0,
                  status:"pending", needsKitchen: orderNeedsKitchen()};
+  const draftId = pendingOrder.id;
   saveOrderConfirmed(draft)
-    .then(()=>{ pendingOrder.saved = true; })
+    .then(()=>{ if(pendingOrder && pendingOrder.id === draftId) pendingOrder.saved = true; })
     .catch(e=>{ console.warn("draft save failed, will retry on confirm", e); });
 }
 
@@ -1848,7 +1874,8 @@ async function confirmPayment(paymentMethod='paynow'){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     delete o.saved;
     if(pendingOrder.saved){
-      await ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt, snacksOnly:true, needsKitchen:false, queueNo:0});
+      ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt, snacksOnly:true, needsKitchen:false, queueNo:0})
+        .catch(e=>console.warn("paid flag will retry", e));
     } else {
       await saveOrderConfirmed(o);
     }
@@ -1888,11 +1915,18 @@ async function confirmPayment(paymentMethod='paynow'){
     o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
     delete o.saved;
     if(pendingOrder.saved){
-      // Already on the server - just flip it to paid. A few bytes, so it goes
-      // through even on a connection that is still waking up.
-      await ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt});
+      // The full order is ALREADY on the server - it was written when the
+      // payment screen opened, while the customer was still at the counter
+      // with signal. This is a few bytes flipping it to paid, and Firebase
+      // guarantees delivery even if it has to queue. So do not make the
+      // customer wait for an acknowledgement: waiting is the only reason they
+      // ever saw a failure, and a "failure" is why they re-ordered on another
+      // phone and got charged twice.
+      ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt})
+        .catch(e=>console.warn("paid flag will retry", e));
     } else {
-      await saveOrderConfirmed(o);   // draft never landed, send the whole thing
+      // No draft on the server, so this one does have to go through now
+      await saveOrderConfirmed(o);
     }
     orders.push(o);
     cart = []; pendingOrder = null;
@@ -2312,7 +2346,10 @@ function renderKitchen(){
                 && Math.abs(o.createdAt-order.createdAt) < 120000
                 && (o.items||[]).map(i=>i.qty+"x"+i.name).sort().join("|") === sig);
               return twin.length
-                ? `<div style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:800">\u26a0\ufe0f possible duplicate of ${twin.map(x=>fmtQ(x.queueNo)).join(", ")}</div>`
+                ? `<div style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:8px">
+                     <span>\u26a0\ufe0f same as ${twin.map(x=>fmtQ(x.queueNo)).join(", ")} \u2014 check before cooking</span>
+                     <button onclick="confirmCancelOrder('${order.id}')" style="background:#DC2626;color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700">Void this</button>
+                   </div>`
                 : "";
             })()}
             ${(function(){
