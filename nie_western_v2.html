@@ -1877,9 +1877,7 @@ async function confirmPayment(paymentMethod='paynow'){
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     delete o.saved;
-    saveOrderFB_attempt(o).catch(e=>{
-      console.warn("order write queued, will deliver when online", e);
-    });
+    await saveOrderConfirmed(o);   // recorded before we thank them
     orders.push(o);
     // Send directly to Google Sheets immediately (most reliable for snacks)
     try {
@@ -1912,18 +1910,24 @@ async function confirmPayment(paymentMethod='paynow'){
     const trackBar = document.getElementById("order-tracking-bar");
     if(trackBar) trackBar.style.display="none";
   } else {
-    // Claimed now, at the moment of payment, so an abandoned basket never
-    // burns a number and the sequence has no gaps.
-    const queueNo = await nextQ();
-    o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
+    // ORDER OF OPERATIONS MATTERS HERE.
+    // The kitchen record is created and CONFIRMED first, then the number is
+    // issued. Doing it the other way round could leave a customer holding a
+    // queue number for an order the kitchen never received.
+    o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
     delete o.saved;
-    // Send it, but do not block the customer on a server acknowledgement.
-    // Firebase holds the write and delivers it when signal returns, so making
-    // them wait only ever produced a false "failed" message - which is why
-    // they re-ordered on another phone and paid once for two meals.
-    saveOrderFB_attempt(o).catch(e=>{
-      console.warn("order write queued, will deliver when online", e);
-    });
+
+    // 1. Kitchen record. If this fails there is no order and no number.
+    await saveOrderConfirmed(o);
+
+    // 2. Only now, with the order safely on the server, issue the number.
+    //    The write just succeeded, so the connection is alive and this will
+    //    almost always come straight back.
+    const queueNo = await nextQ();
+    if(queueNo){
+      o.queueNo = queueNo;
+      ordersRef.child(o.id).update({queueNo}).catch(()=>{});
+    }
     orders.push(o);
     cart = []; pendingOrder = null;
     clearRemarks();
