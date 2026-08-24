@@ -1764,30 +1764,17 @@ async function proceedToPaymentInner(){
   const m = document.getElementById("pay-modal");
   m.classList.remove("hidden"); m.style.display="block";
 
-  // Write the order to the server NOW, while the customer is still connected.
-  // They are about to switch to their bank app, which suspends this page and
-  // drops the Firebase socket - trying to send the whole order after they come
-  // back is what left them stuck on "Processing".
-  const draft = {...pendingOrder, queueNo: pendingOrder.claimedQ || 0,
-                 status:"pending", needsKitchen: orderNeedsKitchen()};
-  const draftId = pendingOrder.id;
-  saveOrderConfirmed(draft)
-    .then(()=>{ if(pendingOrder && pendingOrder.id === draftId) pendingOrder.saved = true; })
-    .catch(e=>{ console.warn("draft save failed, will retry on confirm", e); });
+  // Nothing is written to the server until the customer taps "I Have Paid".
+  // An earlier version saved a draft here so the heavy write happened while
+  // they still had signal, but any device running a slightly older build did
+  // not know to hide drafts and showed unpaid orders in the kitchen. Simpler
+  // is safer: no order exists until it is paid.
 }
 
 function closePayment(){
   // Backed out without paying — return the held portions to the pool
   if(reservedSpecialQty > 0){ releaseSpecial(reservedSpecialQty); reservedSpecialQty = 0; }
-  // Remove the unpaid draft straight away rather than leaving it for the
-  // hourly purge, so it can never be mistaken for a real order.
-  if(pendingOrder && pendingOrder.id && pendingOrder.saved){
-    const id = pendingOrder.id;
-    ordersRef.child(id).once("value").then(s=>{
-      const o = s.val();
-      if(o && o.status === "pending") ordersRef.child(id).remove();
-    }).catch(()=>{});
-  }
+  // Nothing was written before payment, so there is nothing to clean up.
   const m = document.getElementById("pay-modal");
   m.classList.add("hidden"); m.style.display="none";
   pendingOrder = null;
@@ -1873,12 +1860,9 @@ async function confirmPayment(paymentMethod='paynow'){
   if(snacksOnly){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     delete o.saved;
-    if(pendingOrder.saved){
-      ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt, snacksOnly:true, needsKitchen:false, queueNo:0})
-        .catch(e=>console.warn("paid flag will retry", e));
-    } else {
-      await saveOrderConfirmed(o);
-    }
+    saveOrderFB_attempt(o).catch(e=>{
+      console.warn("order write queued, will deliver when online", e);
+    });
     orders.push(o);
     // Send directly to Google Sheets immediately (most reliable for snacks)
     try {
@@ -1914,20 +1898,13 @@ async function confirmPayment(paymentMethod='paynow'){
     const queueNo = pendingOrder.claimedQ || await nextQ();
     o = {...pendingOrder, queueNo, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen};
     delete o.saved;
-    if(pendingOrder.saved){
-      // The full order is ALREADY on the server - it was written when the
-      // payment screen opened, while the customer was still at the counter
-      // with signal. This is a few bytes flipping it to paid, and Firebase
-      // guarantees delivery even if it has to queue. So do not make the
-      // customer wait for an acknowledgement: waiting is the only reason they
-      // ever saw a failure, and a "failure" is why they re-ordered on another
-      // phone and got charged twice.
-      ordersRef.child(o.id).update({status:"paid", paymentMethod, paidAt:o.paidAt})
-        .catch(e=>console.warn("paid flag will retry", e));
-    } else {
-      // No draft on the server, so this one does have to go through now
-      await saveOrderConfirmed(o);
-    }
+    // Send it, but do not block the customer on a server acknowledgement.
+    // Firebase holds the write and delivers it when signal returns, so making
+    // them wait only ever produced a false "failed" message - which is why
+    // they re-ordered on another phone and paid once for two meals.
+    saveOrderFB_attempt(o).catch(e=>{
+      console.warn("order write queued, will deliver when online", e);
+    });
     orders.push(o);
     cart = []; pendingOrder = null;
     closePayment();
