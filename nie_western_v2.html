@@ -957,7 +957,7 @@ function renderMenu(){
   };
   const avail = menu
     .filter(c=> isCatAvail(c))
-    .map(c=>({...c,items:c.items.filter(i=>i.avail!==false && !hiddenByLink(i.id))}))
+    .map(c=>({...c,items:c.items.filter(i=>i.avail!==false && !hiddenByLink(i.id) && !outOfStock(i.id))}))
     .filter(c=>c.items.length);
   // Auto-switch to Snacks tab on first load if ?snacks=1
   if(isSnacksMode && !snacksInitDone){
@@ -1172,6 +1172,16 @@ function handleAdd(id){
   if(isAddon(id) && !cartHasMain()){
     toast("⚠️ Please order a main item first!", "#C4572A");
     return;
+  }
+
+  // Cannot sell more than is physically in the showcase
+  const left = stockLeft(id);
+  if(left !== null){
+    const inCart = cart.filter(x=>x.id===id).reduce((s,x)=>s+x.qty,0);
+    if(inCart >= left){
+      toast(left > 0 ? ("Only " + left + " left in the showcase") : "Sold out", "#C4572A");
+      return;
+    }
   }
 
   // Never let the cart hold more of the special than is left today
@@ -1879,6 +1889,7 @@ async function confirmPayment(paymentMethod='paynow'){
     o = {...pendingOrder, queueNo:0, status:"paid", paymentMethod, paidAt:Date.now(), needsKitchen:false, snacksOnly:true};
     delete o.saved;
     await saveOrderConfirmed(o);   // recorded before we thank them
+    decrementStock(o);
     orders.push(o);
     // Send directly to Google Sheets immediately (most reliable for snacks)
     try {
@@ -1920,6 +1931,7 @@ async function confirmPayment(paymentMethod='paynow'){
 
     // 1. Kitchen record. If this fails there is no order and no number.
     await saveOrderConfirmed(o);
+    decrementStock(o);
 
     // 2. Only now, with the order safely on the server, issue the number.
     //    The write just succeeded, so the connection is alive and this will
@@ -2739,9 +2751,65 @@ function toggleSpecial(){
     .catch(e=>showError("Special", e));
 }
 
+// Showcase stock. Set what you put out in the morning, tap minus when a
+// walk-up customer takes one, and the app stops selling at zero.
+function renderStockAdmin(){
+  const el = document.getElementById("stock-admin");
+  if(!el) return;
+  const cat = menu.find(c=>c.id==="c5");
+  if(!cat){ el.innerHTML = ""; return; }
+  el.innerHTML = cat.items.map(i=>{
+    const n = stockLeft(i.id);
+    const tracked = n !== null;
+    const low = tracked && n > 0 && n <= 2;
+    const out = tracked && n <= 0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid #E5E0D8;background:'
+      + (out?"#FEF2F2":(low?"#FFF7ED":"#fff")) + '">'
+      + '<div style="flex:1"><div style="font-size:13px;font-weight:600;color:'+(out?"#DC2626":"#1C1917")+'">'+i.name+'</div>'
+      + '<div style="font-size:11px;color:#78716C">'
+      + (tracked ? (out ? "SOLD OUT - hidden from customers" : n + " left in showcase") : "not counted")
+      + '</div></div>'
+      + '<button onclick="bumpStock(\''+i.id+'\',-1)" style="width:34px;height:34px;border-radius:8px;background:#F5F3F0;border:1px solid #E5E0D8;font-size:18px;font-weight:700">-</button>'
+      + '<input type="number" min="0" value="'+(tracked?n:"")+'" placeholder="-" onchange="setStock(\''+i.id+'\', this.value)" '
+      + 'style="width:58px;padding:7px;border:1.5px solid #E5E0D8;border-radius:8px;font-size:15px;font-weight:700;text-align:center">'
+      + '<button onclick="bumpStock(\''+i.id+'\',1)" style="width:34px;height:34px;border-radius:8px;background:#C4572A;color:#fff;border:none;font-size:18px;font-weight:700">+</button>'
+      + '</div>';
+  }).join("");
+}
+
+function setStock(id, val){
+  const v = String(val).trim();
+  if(v === ""){ db.ref("stock/" + id).remove().catch(e=>showError("Stock", e)); return; }
+  const n = Math.max(0, parseInt(v, 10) || 0);
+  db.ref("stock/" + id).set(n).catch(e=>showError("Stock", e));
+}
+
+function bumpStock(id, d){
+  db.ref("stock/" + id).transaction(cur=>{
+    const base = (cur === null || cur === undefined) ? 0 : (Number(cur) || 0);
+    return Math.max(0, base + d);
+  }).catch(e=>showError("Stock", e));
+}
+
+function clearAllStock(){
+  if(!confirm("Stop counting stock for every showcase item?")) return;
+  db.ref("stock").remove().then(()=>toast("Stock counting off")).catch(e=>showError("Stock", e));
+}
+
 function renderAdminMenu(){
   const sideOn = ls("mod_side_nie", true);
   const soupOn = ls("mod_soup_nie", true);
+
+  const stockSection = '<div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">'
+    + '<div style="background:#F59E0B;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    +   '<div style="font-family:\'Playfair Display\',serif;font-size:14px;font-weight:700;color:#1C1917">Showcase Stock</div>'
+    +   '<button onclick="clearAllStock()" style="background:rgba(0,0,0,0.12);color:#1C1917;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:700">Stop counting</button>'
+    + '</div>'
+    + '<div style="padding:10px 16px;background:#FFF7ED;font-size:12px;color:#92400E;line-height:1.6">'
+    +   'Enter how many you put in the showcase. The count drops as the app sells them and the item hides itself at zero. '
+    +   'Tap minus when a walk-up customer takes one. Leave blank to not count an item.'
+    + '</div>'
+    + '<div id="stock-admin"></div></div>';
 
   const modSection = `
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">
@@ -2765,7 +2833,7 @@ function renderAdminMenu(){
       </div>
     </div>`;
 
-  document.getElementById("admin-menu-mgmt").innerHTML = renderSpecialAdmin() + modSection + menu.map(cat=>`
+  document.getElementById("admin-menu-mgmt").innerHTML = renderSpecialAdmin() + stockSection + modSection + menu.map(cat=>`
     <div style="background:#fff;border:1px solid #E5E0D8;border-radius:12px;margin-bottom:14px;overflow:hidden">
       <div style="background:#F5F3F0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
         <div style="font-family:'Playfair Display',serif;font-size:14px;font-weight:700">${cat.emoji} ${cat.name}</div>
@@ -2786,6 +2854,7 @@ function renderAdminMenu(){
       `).join("")}
     </div>
   `).join("");
+  renderStockAdmin();
 }
 
 // Deliberate, admin-only clear. Replaces the old automatic wipe.
@@ -4599,6 +4668,38 @@ setInterval(()=>{
 // subscribe to the whole orders list, so each new order was re-sent in full to
 // every connected phone - which is what made writes crawl during the rush.
 let ordersLive = false;
+
+// How many of each showcase item are physically there. Counts down as the
+// app sells them and hides the item at zero, so nobody can buy a burger that
+// is not in the showcase. Walk-up sales are adjusted by hand.
+let stock = {};
+try{
+  db.ref("stock").on("value", s=>{
+    stock = s.val() || {};
+    renderMenu();
+    if(typeof renderStockAdmin === "function") renderStockAdmin();
+    renderKitchen();
+  });
+}catch(e){}
+
+// Take the sold items off the showcase count, atomically so two phones
+// buying the last one cannot both succeed.
+function decrementStock(o){
+  (o.items||[]).forEach(i=>{
+    if(!stock || !stock.hasOwnProperty(i.id)) return;
+    try{
+      db.ref("stock/" + i.id).transaction(cur=>Math.max(0, (Number(cur)||0) - (Number(i.qty)||0)));
+    }catch(e){}
+  });
+}
+
+function stockLeft(id){
+  return (stock && stock.hasOwnProperty(id)) ? (Number(stock[id]) || 0) : null;  // null = not tracked
+}
+function outOfStock(id){
+  const n = stockLeft(id);
+  return n !== null && n <= 0;
+}
 let fbOnline = true;
 try{
   db.ref(".info/connected").on("value", s=>{ fbOnline = !!s.val(); });
