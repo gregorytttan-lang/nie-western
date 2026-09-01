@@ -1980,9 +1980,7 @@ async function confirmPayment(paymentMethod='paynow'){
     </div>`;
   document.getElementById("queue-order-summary").innerHTML = summaryHtml;
 
-  const cashNotice = document.getElementById("cash-notice");
-  if(paymentMethod==="cash"){ cashNotice.classList.remove("hidden"); }
-  else { cashNotice.classList.add("hidden"); }
+  renderCashStatus(o);
   const m = document.getElementById("queue-modal");
   m.classList.remove("hidden"); m.style.display="flex";
   renderMenu();
@@ -2083,6 +2081,7 @@ function reopenQueueForOrder(orderId){
     document.getElementById("queue-number").textContent = String(o.queueNo).padStart(2,"0");
     document.getElementById("queue-dining").textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
     updateStatusUI(o.status);
+    renderCashStatus(o);
     startTrackingOrder(orderId);
     const m = document.getElementById("queue-modal");
     m.classList.remove("hidden"); m.style.display="flex";
@@ -2150,6 +2149,7 @@ function closeQueue(){
   const rb = document.getElementById("staff-reply-box");
   if(rb){ rb.classList.add("hidden"); rb.innerHTML=""; }
   lastReplyShown = null;
+  lastCashState = null;
   // Restore hidden elements for next order
   const qLabel = document.getElementById("queue-no-label");
   if(qLabel) qLabel.style.display="";
@@ -2552,6 +2552,35 @@ function clearReply(){
   closeReply();
   renderKitchen();
   toast("Message removed", "#78716C");
+}
+
+// The cash notice on the customer's phone used to stay on "please pay at the
+// counter" forever, even after the stall had taken the money and tapped Paid.
+// Now it turns green the moment staff confirm.
+function renderCashStatus(o){
+  const box = document.getElementById("cash-notice");
+  if(!box) return;
+  if(!o || o.paymentMethod !== "cash"){ box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  if(o.cashCollected){
+    if(lastCashState === false){
+      // Only on the change, not on every refresh
+      try{ if(navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
+      toast("\u2705 Cash payment confirmed", "#16A34A");
+    }
+    lastCashState = true;
+    box.style.background = "#16A34A";
+    box.style.borderTop = "1px solid #15803D";
+    box.style.color = "#fff";
+    box.innerHTML = '<div style="font-size:15px;font-weight:800;color:#fff">\u2705 CASH RECEIVED \u2014 thank you!</div>'
+      + '<div style="font-size:12px;color:rgba(255,255,255,0.85);margin-top:2px">Payment confirmed by our staff. Please wait for your number to be called.</div>';
+  } else {
+    lastCashState = false;
+    box.style.background = "#1E3A5F";
+    box.style.borderTop = "1px solid #2D5A8E";
+    box.style.color = "#93C5FD";
+    box.innerHTML = '<div style="font-size:14px;font-weight:700;color:#93C5FD">\u{1F4B5} Please pay cash at the counter and show this screen</div>';
+  }
 }
 
 // Customer side — show whatever the stall has sent
@@ -3474,6 +3503,7 @@ function playCustomerBeep(){
 }
 
 let lastKnownStatus = null;
+let lastCashState = null;
 
 function updateStatusUI(status){
   if(status === "collected" && trackingOrderId){
@@ -3565,6 +3595,7 @@ function startTrackingOrder(orderId){
     if(dEl) dEl.textContent = T(o.dining==="takeaway" ? "🥡 Take Away" : "🍽️ Dine In");
     updateStatusUI(o.status);
     renderStaffReply(o);
+    renderCashStatus(o);
   });
 }
 
