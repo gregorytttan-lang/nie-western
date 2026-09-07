@@ -114,6 +114,50 @@ Database Rules.
 
 ---
 
+## Emergency interim rules — safe to apply while the stall is open
+
+If the incognito test above showed the database is open, apply this **now**. It
+does not require any code change and does not touch the order flow.
+
+```json
+{
+  "rules": {
+    "orders":        { ".read": true, ".write": true },
+    "queue":         { ".read": true, ".write": true },
+    "queue_display": { ".read": true, ".write": true },
+    "stock":         { ".read": true, ".write": true },
+    "availability":  { ".read": true, ".write": true },
+    "stall_status":  { ".read": true, ".write": true },
+    "special":       { ".read": true, ".write": true },
+
+    "archives":      { ".read": false, ".write": false },
+    "payouts":       { ".read": false, ".write": false },
+    "float":         { ".read": false, ".write": false },
+
+    "$other":        { ".read": false, ".write": false }
+  }
+}
+```
+
+**Keeps working:** customers ordering, kitchen receiving, printing, queue
+display, stock, availability, opening and closing the stall. Nothing in the
+serving flow reads or writes the three locked paths.
+
+**Stops working, on purpose, until Firebase Auth is in place:**
+
+* the Reports tab in Admin (revenue figures, payouts, float)
+* the end-of-day archive and Sheets save
+
+So do the auth work the same evening, before you close. If you need the closing
+routine before then, set the three locked paths back to `true` for the few
+minutes it takes, then lock them again.
+
+**What this does not fix:** `orders` still has to stay open, because the kitchen
+tablet has no way to identify itself yet. Today's orders remain readable and
+deletable by anyone. Only Step 1 below closes that.
+
+---
+
 ## Fix, in priority order
 
 ### Step 1 — Add Firebase Authentication (this is the real fix)
