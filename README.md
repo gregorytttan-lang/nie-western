@@ -14,15 +14,11 @@
 1. Go to https://console.firebase.google.com
 2. Create new project — name it e.g. `nie-western-pos`
 3. Enable **Realtime Database** (Singapore region: `asia-southeast1`)
-4. Set rules to allow read/write (test mode for now):
-```json
-{
-  "rules": {
-    ".read": true,
-    ".write": true
-  }
-}
-```
+4. Set the Database Rules. **Do not use test mode.** Open rules
+   (`".read": true, ".write": true`) leave your entire sales history, payouts
+   and cash float readable and deletable by anyone on the internet — the
+   database URL is public, because it ships inside the customer QR page.
+   Use the locked-down rule set in [SECURITY.md](SECURITY.md) instead.
 5. Go to Project Settings → Web App → Register app → copy config
 
 ### 2. Add Firebase Config
@@ -71,6 +67,11 @@ appId:             "YOUR_APP_ID"
 ## Breakfast Hours
 - Breakfast category **auto-hides after 11:15 AM**
 - No manual action needed
+
+## Security
+Read [SECURITY.md](SECURITY.md) before deploying or changing Firebase rules.
+The database URL is public by design, so the Database Rules are the only thing
+protecting your sales history, payouts and cash float.
 
 ## Notes
 - Order numbers cycle 01–99 then reset
