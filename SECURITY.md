@@ -28,91 +28,47 @@ repo and without the pages.
 So the database rules are the only control. **If the rules are open, everything
 below is readable and deletable by anyone in the world.**
 
-### Check your current rules
+### Current status — root read is DENIED (verified 2026-09-07)
 
-Firebase Console → Realtime Database → **Rules** tab.
-
-If they look like this, the database is fully open to the public internet:
+An unauthenticated read of the database root returns:
 
 ```json
-{ "rules": { ".read": true, ".write": true } }
+{ "error" : "Permission denied" }
 ```
 
-You can also test from any browser — open this URL while signed out
-(incognito window):
+So the database is **not** in the fully-open `".read": true` state at the root.
+That rules out the worst case: a stranger cannot dump the entire database in one
+request.
+
+**This does not mean the database is secure.** A root read can be denied while
+individual paths are still world-readable, because Firebase rules cascade
+downward from wherever they are granted, not upward. The root test tells you
+nothing about:
+
+* whether `/orders`, `/archives`, `/payouts` or `/float` are individually open
+* whether **writes** are allowed anywhere — the root test only tested reading
+
+### Still to verify
+
+Open each of these in an incognito window. `Permission denied` is the answer you
+want; anything else means that path is public.
 
 ```
-https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/.json?shallow=true
+.../orders.json?shallow=true
+.../archives.json?shallow=true
+.../payouts.json?shallow=true
+.../float.json
 ```
 
-* Returns a list of keys (`orders`, `archives`, `payouts`, …) → **open, act now.**
-* Returns `{"error":"Permission denied"}` → reads are locked. Good.
+`/orders` is the one to check first. The kitchen tablet has no way to sign in
+today, so for it to receive orders at all, `/orders` almost certainly has
+`".read": true`. If so, every order, price and total placed today is readable by
+anyone — and very likely deletable too.
 
-### What is sitting in that database
-
-| Path | Contents |
-|------|----------|
-| `orders` | Every order, item, price, total, cash-collected flags |
-| `archives` | Monthly sales archives — full revenue history |
-| `payouts` | Payout records |
-| `float` | Cash float amount |
-| `stock` | Stock counts |
-| `stall_status` | Open/closed state for the stall |
-| `queue`, `queue_display` | Queue numbers, customer-call display |
-| `special`, `availability` | Daily special and item availability |
-
-With open rules, a stranger can read all of your sales history, and can also
-**delete all of it**, inject fake orders into the kitchen, or set the stall to
-closed during service.
-
----
-
-## 2. The staff password does not protect anything
-
-`nie_western_v2.html`, `nie_western_v88.html` and `nie_western_quickpos.html`
-each contain the staff password in plain text in the JavaScript, and check it in
-the browser:
-
-```js
-STAFF_PWD: "123456789",
-...
-if(val === STAFF_PWD){ _authed = true; showView(v); }
-```
-
-Two separate problems:
-
-1. The password is readable by anyone who opens **View Source** on the page.
-2. Even without knowing it, anyone can open the browser console and run
-   `_authed = true` — or simply `showView('admin')`, which is not gated at all.
-
-A password checked in the browser can never protect anything, because the
-browser belongs to the attacker. **Changing the password to something stronger
-does not fix this.** The admin screen can only be protected by database rules
-that refuse to serve the data to an unauthenticated caller.
-
----
-
-## 3. The Google Apps Script endpoint is public and unauthenticated
-
-```
-SHEETS_URL: "https://script.google.com/macros/s/AKfycbw-...redacted.../exec"
-```
-
-This is in the page source, so anyone can POST to it and write arbitrary rows
-into your sales spreadsheet. Apps Script web apps deployed as "Anyone" have no
-authentication of their own.
-
----
-
-## 4. What is *not* a problem
-
-**The `apiKey` value (`AIzaSy...`) is not a secret.** Firebase web API keys are
-designed to be published in client code — they identify the project, they do not
-grant access. Do not waste time rotating it; it will change nothing. Google
-documents this explicitly. Access is controlled by Database Rules, and only by
-Database Rules.
-
----
+**The definitive check** is not a URL test at all. Firebase Console → Realtime
+Database → **Rules** tab shows the exact rule set. Reading that answers every
+question above at once, including writes, which cannot be tested safely from a
+browser address bar.
 
 ## Emergency interim rules — safe to apply while the stall is open
 
