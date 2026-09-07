@@ -72,16 +72,50 @@ counting is silently failing right now** — every write returns
 
 ## Do this now, while the stall is trading
 
-### A. Export a backup first (2 minutes, no risk)
+### A. Export a backup first (5 minutes, no risk)
 
 Writes are open on `archives`, so the sales history can be deleted by anyone.
-Before changing anything, take a copy you control:
+Take a copy you control before changing anything.
 
-Firebase Console → Realtime Database → **Data** tab → **⋮** menu →
-**Export JSON**. Save the file somewhere off the tablet.
+Use a laptop, not the tablet — the export menu is awkward on a small screen.
 
-Do this first. It costs nothing and it means the worst case is an annoyance
-rather than a permanent loss.
+1. Go to <https://console.firebase.google.com> and sign in with the Google
+   account that owns the project.
+2. Click the **nie-western-pos** project.
+3. In the left sidebar, click **Realtime Database**.
+4. Click the **Data** tab (it sits next to Rules).
+5. **Check you are at the root.** The top line of the data panel should read
+   `nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app` with
+   `orders`, `archives`, `payouts` listed underneath. If you have clicked into a
+   child node, click that top line to go back up. Export only saves the node you
+   are currently looking at — this is the one step people get wrong.
+6. Click the **⋮** (three dots) at the top-right of the data panel.
+7. Choose **Export JSON**. The browser downloads a `.json` file.
+8. Rename it with the date: `nie-western-backup-2026-09-07.json`.
+9. Copy it somewhere that is not the Downloads folder — Google Drive, or email
+   it to yourself. A backup on one laptop is not a backup.
+
+**Verify it worked before moving on.** Open the file. It should be large and
+contain `archives`, `orders` and `payouts`. If it says `null` or is only a few
+lines, you exported a child node — go back to step 5.
+
+Note: the **Backups** tab in the console is a paid (Blaze) feature. On the Spark
+plan this manual export is the way to do it, so repeat it at month end.
+
+#### If the console export will not work (phone-only fallback)
+
+Reads are currently open, so you can save each path straight from the browser.
+**Do this before applying the rules in section B** — that change switches these
+reads off.
+
+Open each URL and save the page (or copy the text into a note):
+
+```
+https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/archives.json
+https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/orders.json
+https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/payouts.json
+https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/float.json
+```
 
 ### B. Interim rules — closes the read exposure, nothing stops working
 
