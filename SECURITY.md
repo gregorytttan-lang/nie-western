@@ -28,52 +28,9 @@ repo and without the pages.
 So the database rules are the only control. **If the rules are open, everything
 below is readable and deletable by anyone in the world.**
 
-### Current status — root read is DENIED (verified 2026-09-07)
+### Confirmed rules — every path is world read/write (verified 2026-09-07)
 
-An unauthenticated read of the database root returns:
-
-```json
-{ "error" : "Permission denied" }
-```
-
-So the database is **not** in the fully-open `".read": true` state at the root.
-That rules out the worst case: a stranger cannot dump the entire database in one
-request.
-
-**This does not mean the database is secure.** A root read can be denied while
-individual paths are still world-readable, because Firebase rules cascade
-downward from wherever they are granted, not upward. The root test tells you
-nothing about:
-
-* whether `/orders`, `/archives`, `/payouts` or `/float` are individually open
-* whether **writes** are allowed anywhere — the root test only tested reading
-
-### Still to verify
-
-Open each of these in an incognito window. `Permission denied` is the answer you
-want; anything else means that path is public.
-
-```
-.../orders.json?shallow=true
-.../archives.json?shallow=true
-.../payouts.json?shallow=true
-.../float.json
-```
-
-`/orders` is the one to check first. The kitchen tablet has no way to sign in
-today, so for it to receive orders at all, `/orders` almost certainly has
-`".read": true`. If so, every order, price and total placed today is readable by
-anyone — and very likely deletable too.
-
-**The definitive check** is not a URL test at all. Firebase Console → Realtime
-Database → **Rules** tab shows the exact rule set. Reading that answers every
-question above at once, including writes, which cannot be tested safely from a
-browser address bar.
-
-## Emergency interim rules — safe to apply while the stall is open
-
-If the incognito test above showed the database is open, apply this **now**. It
-does not require any code change and does not touch the order flow.
+The live rule set is:
 
 ```json
 {
@@ -81,36 +38,95 @@ does not require any code change and does not touch the order flow.
     "orders":        { ".read": true, ".write": true },
     "queue":         { ".read": true, ".write": true },
     "queue_display": { ".read": true, ".write": true },
-    "stock":         { ".read": true, ".write": true },
     "availability":  { ".read": true, ".write": true },
     "stall_status":  { ".read": true, ".write": true },
-    "special":       { ".read": true, ".write": true },
-
-    "archives":      { ".read": false, ".write": false },
-    "payouts":       { ".read": false, ".write": false },
-    "float":         { ".read": false, ".write": false },
-
-    "$other":        { ".read": false, ".write": false }
+    "archives":      { ".read": true, ".write": true },
+    "payouts":       { ".read": true, ".write": true },
+    "float":         { ".read": true, ".write": true },
+    "special":       { ".read": true, ".write": true }
   }
 }
 ```
 
-**Keeps working:** customers ordering, kitchen receiving, printing, queue
-display, stock, availability, opening and closing the stall. Nothing in the
-serving flow reads or writes the three locked paths.
+There is no rule at the root, which is why a read of `/.json` returns
+`Permission denied`. That denial is misleading: it only prevents fetching
+everything in a single request. Every path that actually holds data is granted
+`true` individually, so anyone on the internet can read and delete all of it by
+naming the path:
 
-**Stops working, on purpose, until Firebase Auth is in place:**
+* `/archives.json` — full monthly revenue history
+* `/payouts.json` — supplier payout records
+* `/float.json` — cash float
+* `/orders.json` — every order, item, price and total
 
-* the Reports tab in Admin (revenue figures, payouts, float)
-* the end-of-day archive and Sheets save
+Writes are open on all of them too, so the same stranger can wipe the sales
+history, inject orders into the kitchen, or set `stall_status` to closed during
+service.
 
-So do the auth work the same evening, before you close. If you need the closing
-routine before then, set the three locked paths back to `true` for the few
-minutes it takes, then lock them again.
+### Bug found while reviewing the rules: `stock` is missing
 
-**What this does not fix:** `orders` still has to stay open, because the kitchen
-tablet has no way to identify itself yet. Today's orders remain readable and
-deletable by anyone. Only Step 1 below closes that.
+The code reads and writes `stock` (`nie_western_v2.html:2811-2825`), but there is
+no `"stock"` entry in the rules. Unlisted paths default to denied, so **stock
+counting is silently failing right now** — every write returns
+`PERMISSION_DENIED`. Adding `stock` to the rules fixes it.
+
+## Do this now, while the stall is trading
+
+### A. Export a backup first (2 minutes, no risk)
+
+Writes are open on `archives`, so the sales history can be deleted by anyone.
+Before changing anything, take a copy you control:
+
+Firebase Console → Realtime Database → **Data** tab → **⋮** menu →
+**Export JSON**. Save the file somewhere off the tablet.
+
+Do this first. It costs nothing and it means the worst case is an annoyance
+rather than a permanent loss.
+
+### B. Interim rules — closes the read exposure, nothing stops working
+
+```json
+{
+  "rules": {
+    "orders":        { ".read": true,  ".write": true },
+    "queue":         { ".read": true,  ".write": true },
+    "queue_display": { ".read": true,  ".write": true },
+    "availability":  { ".read": true,  ".write": true },
+    "stall_status":  { ".read": true,  ".write": true },
+    "special":       { ".read": true,  ".write": true },
+    "stock":         { ".read": true,  ".write": true },
+
+    "archives":      { ".read": false, ".write": true },
+    "payouts":       { ".read": false, ".write": true },
+    "float":         { ".read": false, ".write": true }
+  }
+}
+```
+
+Two changes from what is live today:
+
+* **`stock` added** — fixes the silently broken stock counting described above.
+* **Read turned off on `archives`, `payouts`, `float`** — a stranger can no
+  longer read your revenue history, payouts or cash float.
+
+Writes stay on deliberately, so every staff action still succeeds mid-service:
+recording a payout, setting the float, and the end-of-day archive save all
+write, they do not read. The app writes to `localStorage` first and syncs to
+Firebase second (`saveFloat`, `addPayout`), so staff devices keep showing their
+own data from cache.
+
+The only visible loss: the monthly archive list in the Reports tab will be
+empty, and payouts recorded on the tablet will not appear on the phone until
+tonight.
+
+**Stricter option** — if no payouts or float changes happen during service, set
+`".write": false` on those same three paths as well. That also blocks a stranger
+from deleting the sales history. Recording a payout would then fail with
+"Saved on this device only", which is handled but not ideal mid-shift.
+
+**What this does not fix:** `orders` must stay open, because the kitchen tablet
+has no way to identify itself yet. Today's orders stay readable and deletable by
+anyone until Step 1 below is done.
 
 ---
 
