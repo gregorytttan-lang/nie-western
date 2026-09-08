@@ -63,12 +63,38 @@ Writes are open on all of them too, so the same stranger can wipe the sales
 history, inject orders into the kitchen, or set `stall_status` to closed during
 service.
 
-### Bug found while reviewing the rules: `stock` is missing
+### Which file is live, and which paths it actually uses
 
-The code reads and writes `stock` (`nie_western_v2.html:2811-2825`), but there is
-no `"stock"` entry in the rules. Unlisted paths default to denied, so **stock
-counting is silently failing right now** — every write returns
-`PERMISSION_DENIED`. Adding `stock` to the rules fixes it.
+The tablet runs **`nie_western_v88.html`**. Its Firebase paths are:
+
+`orders`, `queue`, `queue_display`, `availability`, `stall_status`, `archives`,
+`payouts`, `float` — all covered by the applied rules.
+
+Two corrections to earlier notes in this file, both from checking v88 rather
+than v2:
+
+* **v88 has no stock feature.** `stock` appears nowhere in it — that is a v2
+  feature. The `stock` rule that was added is harmless but unused, and nothing
+  was broken by its absence. The earlier "stock counting is silently failing"
+  note applies to `nie_western_v2.html`, which is not the live file.
+* **v88 has no `special` path either** — also v2 only.
+
+### Genuinely missing rule: `board_soldout`
+
+`nie-display.html` reads and writes `board_soldout` (lines 370 and 461) and
+there is no rule for it, so the sold-out board on the display is denied. If that
+display is in use, add:
+
+```json
+"board_soldout": { ".read": true, ".write": true },
+```
+
+### Dead files still published: `index.html` and `kitchen.html`
+
+Both use a different path prefix — `nie_western/orders` and
+`nie_western/order_counter` — which has no rule and never had one, so neither
+page can reach the database. They are leftovers from the original README setup,
+superseded by v88, and they are still served publicly by GitHub Pages.
 
 ## Status
 
