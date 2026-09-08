@@ -70,6 +70,22 @@ no `"stock"` entry in the rules. Unlisted paths default to denied, so **stock
 counting is silently failing right now** — every write returns
 `PERMISSION_DENIED`. Adding `stock` to the rules fixes it.
 
+## Status
+
+| Item | State |
+|------|-------|
+| Public read on `archives` | **Closed** 2026-09-08 — verified `Permission denied` |
+| Public read on `payouts`, `float` | Closed by the same change |
+| `stock` rule added | Applied — fixes the silently failing stock counting |
+| Public read/write on `orders` | **Still open** — needs Step 1 (Firebase Auth) |
+| Public write on `archives`, `payouts`, `float` | **Still open** — needs Step 1 |
+| `STAFF_PWD` in page source | **Still present** — needs Step 1 |
+| Apps Script `SHEETS_URL` | **Still open** — needs Step 3 |
+
+The interim rules below are in force. They are not the finished state: writes
+are still public everywhere, so the sales history can still be deleted by
+anyone. Step 1 is what closes that.
+
 ## Do this now, while the stall is trading
 
 ### A. Export a backup first (5 minutes, no risk)
