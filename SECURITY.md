@@ -98,21 +98,28 @@ superseded by v88, and they are still served publicly by GitHub Pages.
 
 ## Status
 
+Closed as of 2026-09-08, verified against the live database:
+
 | Item | State |
 |------|-------|
-| Public read on `archives` | **Closed** 2026-09-08 — verified `Permission denied` |
-| Public read on `payouts`, `float` | Closed by the same change |
-| `stock` rule added | Applied — fixes the silently failing stock counting |
-| Public read/write on `orders` | **Still open** — needs Step 1 (Firebase Auth) |
-| Public write on `archives`, `payouts`, `float` | **Still open** — needs Step 1 |
-| `STAFF_PWD` in page source | **Still present** — needs Step 1 |
-| Apps Script `SHEETS_URL` | **Still open** — needs Step 3 |
+| Public read of `/orders` | **Closed** — verified `Permission denied` while signed out |
+| Public write/delete of `/orders` | **Closed** — creating a new order still allowed, altering an existing one is not |
+| Public read/write of `archives`, `payouts`, `float` | **Closed** — staff only, both directions |
+| Public write of `stall_status` | **Closed** — public may read it, only staff may set it |
+| `STAFF_PWD` in `nie_western_v88.html` | **Removed** — sign-in goes to Firebase Authentication |
+| Staff session lost on every reload | **Fixed** — the session persists |
 
-The interim rules below are in force. They are not the finished state: writes
-are still public everywhere, so the sales history can still be deleted by
-anyone. Step 1 is what closes that.
+Still open, deliberately or not yet done:
 
-## Do this now, while the stall is trading
+| Item | Note |
+|------|------|
+| `queue`, `queue_display`, `availability`, `board_soldout` world-writable | Accepted. `nie-display.html` runs unattended with no sign-in and writes to all four. Nuisance risk only — no money data or order history is reachable. |
+| Apps Script `SHEETS_URL` public | Anyone who reads the page source can POST rows into the sales spreadsheet. Needs a redeployment — see Step 3. |
+| Sign-out button not deployed | Written and on the branch, not yet merged. Without it a tablet stays signed in indefinitely. |
+| `nie_western_v2.html`, `nie_western_quickpos.html` still published | Both still carry the old `STAFF_PWD` in source. The password no longer grants anything — the rules require a Firebase account the old files never obtain — so an intruder reaches an empty screen. Dead weight worth deleting. |
+| `index.html`, `kitchen.html` still published | Address `nie_western/orders`, a prefix no rule covers. Non-functional. |
+
+## Do this now, while the stall is trading## Do this now, while the stall is trading
 
 ### A. Export a backup first (5 minutes, no risk)
 
