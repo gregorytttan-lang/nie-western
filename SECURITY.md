@@ -137,6 +137,30 @@ accounting figures. Every individual order, the monthly archives, payouts, float
 and stock are gone. The JSON export in section A is the only thing that captures
 the actual data.
 
+### Before changing any rules: how to undo it
+
+A rules change controls **who may access** data. It never reads, writes or
+deletes the data itself, so no rules edit can lose your sales history.
+
+To make it reversible in 10 seconds:
+
+1. Select everything in the Rules box and copy it into a note.
+2. Make the change and click **Publish**.
+3. If anything misbehaves, paste the old text back and Publish again.
+
+Firebase also keeps a version history of rules, so that is a second way back.
+The worst realistic outcome is a screen in Admin failing to load until you
+revert.
+
+If you would rather change one line at a time, start with just:
+
+```json
+"archives": { ".read": false, ".write": true },
+```
+
+Publish, take a test order, confirm the kitchen receives it, then do `payouts`
+and `float` the same way, and add `stock` last.
+
 ### B. Interim rules — closes the read exposure, nothing stops working
 
 ```json
