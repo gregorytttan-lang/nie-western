@@ -117,6 +117,26 @@ https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/payout
 https://nie-western-pos-default-rtdb.asia-southeast1.firebasedatabase.app/float.json
 ```
 
+#### The nightly Google Sheets save is not a backup
+
+`doSaveDailyToSheets()` (`nie_western_v2.html:3654`) posts a single summary row
+per day: date, total revenue, PayNow and cash splits, order count,
+dine-in/takeaway counts, float, payout total, cash in box, and the top five
+items. Payouts go as their own rows.
+
+Individual orders are never sent — only aggregates computed from them. The menu
+and stock are not sent either. The Sheet can tell you what a day took; it cannot
+reproduce an order.
+
+`archiveMonth()` (`nie_western_v2.html:3913`) is likewise a summary, and it
+writes to `archives/<monthKey>` **inside the same Firebase database** that is
+currently world-writable. It is not off-site and does not survive a wipe.
+
+So after a wipe: the daily totals in Google Sheets survive, which covers the
+accounting figures. Every individual order, the monthly archives, payouts, float
+and stock are gone. The JSON export in section A is the only thing that captures
+the actual data.
+
 ### B. Interim rules — closes the read exposure, nothing stops working
 
 ```json
