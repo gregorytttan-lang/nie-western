@@ -252,21 +252,39 @@ anyone until Step 1 below is done.
 
 ## Fix, in priority order
 
-### Step 1 — Add Firebase Authentication (this is the real fix)
+### Step 1 — Deploy the login (code is written, on this branch)
 
-Staff devices need a real identity so the rules can tell staff apart from the
-public. There is no way around this step.
+`nie_western_v88.html` now signs in against Firebase Authentication instead of
+comparing to a password held in the file. `STAFF_PWD` is gone from the source.
 
-1. Firebase Console → **Authentication** → Get started
-2. Enable **Email/Password**
-3. Add one account per staff device (e.g. `kitchen@niewestern.local`)
-4. Add a sign-in step to the staff pages, replacing the `STAFF_PWD` check
-5. Remove `STAFF_PWD` from all source files
+What changed:
 
-### Step 2 — Apply locked-down rules
+* The password box looks and behaves the same. Behind it,
+  `signInWithEmailAndPassword` checks the password on Google's servers.
+* The account name (`CONFIG.STAFF_EMAIL`) stays in the file. An account name is
+  not a secret; the password never reaches the file.
+* Firebase remembers the session, so the tablet survives a refresh. The old
+  `_authed` flag lived in memory and was lost on every reload.
+* The all-orders feed (`attachOrdersListener`) now starts on sign-in rather than
+  on page load. Customers never needed it — their own order is tracked by id,
+  and queue numbers come from the `queue` counter — and once the rules require a
+  sign-in to list orders, an unsigned-in phone would be refused it anyway.
 
-Apply these **together with Step 1** — applying them first will break the
-kitchen tablet, because it has no way to sign in yet.
+**Order of deployment matters.** Deploy the code FIRST, then the rules. The new
+code works fine under the current rules (signing in is simply extra), so there
+is no window where the stall is broken. Doing it the other way round breaks the
+tablet immediately.
+
+1. Firebase Console → **Authentication** → Get started → enable
+   **Email/Password**.
+2. **Users** tab → Add user. Email `staff@niewestern.local`, and a strong
+   password — this is what staff will type from now on. Not `123456789`.
+3. Replace `nie_western_v88.html` on the site with the version from this branch.
+4. On the tablet, hard-refresh and sign in with the new password. Check the
+   Kitchen screen fills, and place a test order.
+5. Only once that works, apply the rules in Step 2.
+
+### Step 2 — Apply the final rules
 
 ```json
 {
@@ -275,30 +293,59 @@ kitchen tablet, because it has no way to sign in yet.
       ".read": "auth != null",
       "$orderId": {
         ".read": true,
-        ".write": "!data.exists() || auth != null",
-        ".validate": "newData.hasChildren(['id','items','total'])"
+        ".write": "!data.exists() || auth != null"
       }
     },
+
     "archives":      { ".read": "auth != null", ".write": "auth != null" },
     "payouts":       { ".read": "auth != null", ".write": "auth != null" },
     "float":         { ".read": "auth != null", ".write": "auth != null" },
-    "stock":         { ".read": true, ".write": "auth != null" },
-    "availability":  { ".read": true, ".write": "auth != null" },
-    "stall_status":  { ".read": true, ".write": "auth != null" },
-    "special":       { ".read": true, ".write": "auth != null" },
+    "stall_status":  { ".read": true,           ".write": "auth != null" },
+
     "queue":         { ".read": true, ".write": true },
-    "queue_display": { ".read": true, ".write": "auth != null" },
-    "$other":        { ".read": false, ".write": false }
+    "queue_display": { ".read": true, ".write": true },
+    "availability":  { ".read": true, ".write": true },
+    "board_soldout": { ".read": true, ".write": true }
   }
 }
 ```
 
-The intent: the public can place an order and read the menu state and the call
-display. The public cannot list all orders, cannot read the money, cannot change
-anything, and cannot write to any path not named here.
+Why each block is shaped that way:
 
-Test with the **Rules Playground** (Console → Rules → Playground) before saving:
-simulate an unauthenticated read of `/archives` and confirm it is denied.
+* **`orders`** — a customer may create their order (`!data.exists()`) and read
+  that one order back to track it, but cannot list every order in the stall or
+  alter one that exists. Cancelling and status changes live in `renderKitchen`,
+  which is staff-only, so nothing customer-facing needs write access to an
+  existing order.
+* **`archives`, `payouts`, `float`** — staff only, both directions. This is what
+  finally stops a stranger deleting the sales history.
+* **`stall_status`** — the public must read it to see the closed screen; only
+  staff may set it.
+
+#### What stays world-writable, and why
+
+`queue`, `queue_display`, `availability` and `board_soldout` are still open to
+anyone. `nie-display.html` runs unattended on the display tablet with no
+sign-in, and it *writes* to all of these — `board_soldout` and `availability`
+when someone taps an item sold out (line 370-371), and `queue_display` when a
+call times out (line 440-441). Locking them would freeze the display.
+
+The residual risk is nuisance, not loss: someone could flag items sold out or
+clear the call display. Staff see it immediately and can undo it in seconds. No
+money data and no order history is reachable this way.
+
+To close it properly later, give the display tablet its own staff sign-in — the
+session persists, so it would be signed in once at setup. That is worth doing,
+but it adds a way for an unattended screen to fail silently mid-service, so it
+should be a deliberate change on a quiet day rather than part of tonight.
+
+#### Known edge case
+
+If a customer's order write succeeds on the server but the acknowledgement is
+lost, a retry becomes a write to an order that now exists, and the rule refuses
+it. The customer sees an error even though the kitchen has the order. This is
+rare and loses nothing; it is the accepted cost of stopping strangers rewriting
+existing orders.
 
 ### Step 3 — Redeploy the Apps Script endpoint
 
