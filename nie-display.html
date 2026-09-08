@@ -480,7 +480,7 @@ if(db){
     entries=data;
     renderDisplay();
   }, function(err){
-    diag('READ ERROR: '+err.code+' -- Firebase Console > Rules > add "queue_display":{".read":true,".write":true}','#7F1D1D');
+    diag('READ ERROR: '+err.code+' -- Database Rules problem, see SECURITY.md','#7F1D1D');
   });
 }
 </script>

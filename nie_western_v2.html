@@ -2201,7 +2201,8 @@ function markReady(id, queueNo){
     status:   "serving"
   }).catch(err=>{
     alert("Could not reach the display.\n\nError: " + (err && err.code ? err.code : err)
-      + "\n\nFirebase Console > Rules > add:\n\"queue_display\": { \".read\": true, \".write\": true }");
+      + "\n\nThis is a Database Rules problem. See SECURITY.md — do not"
+      + " open the path to everyone.");
   });
   toast("\ud83d\udce3 Calling #" + String(queueNo).padStart(3,"0"), "#16A34A");
 }

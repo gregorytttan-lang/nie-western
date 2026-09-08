@@ -19,6 +19,12 @@ if (typeof firebase === "undefined" || !firebase.database) {
   document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"><\/scr' + 'ipt>');
 }
 </script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script>
+if (typeof firebase === "undefined" || !firebase.auth) {
+  document.write('<scr' + 'ipt src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-auth-compat.min.js"><\/scr' + 'ipt>');
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -378,7 +384,10 @@ function formatAddons(item){
 const CONFIG = {
   STALL_NAME:   "NIE Western Food",
   LOCATION:     "NIE Canteen",
-  STAFF_PWD:    "123456789",
+  // Staff sign-in. The password is deliberately NOT here — it lives in
+  // Firebase Authentication and is checked on Google's servers. Only the
+  // account name is in this file, and an account name is not a secret.
+  STAFF_EMAIL:  "staff@niewestern.local",
   WA_NUMBERS:   ["6590628726", "6581612943"],
   SHEETS_URL:   "https://script.google.com/macros/s/AKfycbw-ZSqLtKFDJT2QDO0erE4Vr-yBVN7tllYpaQ615I2Po3GO82HD3fPcsWNwhYRixrbAlQ/exec",
   MENU_KEY:     "menu_nie_v7",
@@ -386,7 +395,7 @@ const CONFIG = {
   RAWBT_PORT:   40213,
 };
 // Aliases for backward compat
-const STAFF_PWD  = CONFIG.STAFF_PWD;
+const STAFF_EMAIL = CONFIG.STAFF_EMAIL;
 const SHEETS_URL = CONFIG.SHEETS_URL;
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -797,7 +806,11 @@ function saveMenu()  { lss("menu_nie_v6", menu); }
 function saveOrders(){ /* orders saved to Firebase */ }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
-// STAFF_PWD via CONFIG alias above
+// Staff sign in against Firebase Authentication. The old code compared what
+// was typed to a password stored in this file, which anyone could read with
+// View Source — and setting _authed in the console skipped it entirely. A
+// browser check can never protect anything; the database rules do that, and
+// they need a real signed-in account to recognise.
 let _pendingView = null;
 let _authed = false;
 
@@ -813,15 +826,37 @@ function authView(v){
 
 function checkPwd(){
   const val = document.getElementById("pwd-input").value;
-  if(val === STAFF_PWD){
-    _authed = true;
-    closePwd();
-    if(_pendingView){ showView(_pendingView); _pendingView=null; }
-  } else {
-    document.getElementById("pwd-error").textContent = "Incorrect password. Try again.";
-    document.getElementById("pwd-input").value = "";
-    document.getElementById("pwd-input").focus();
-  }
+  const err = document.getElementById("pwd-error");
+  const btn = document.getElementById("pwd-enter");
+  if(!val){ err.textContent = "Enter the password."; return; }
+  err.textContent = "Signing in…";
+  if(btn) btn.disabled = true;
+  staffSignIn(val)
+    .then(()=>{
+      err.textContent = "";
+      closePwd();
+      if(_pendingView){ showView(_pendingView); _pendingView=null; }
+    })
+    .catch(e=>{
+      err.textContent = signInErrorText(e);
+      document.getElementById("pwd-input").value = "";
+      document.getElementById("pwd-input").focus();
+    })
+    .then(()=>{ if(btn) btn.disabled = false; });
+}
+
+function staffSignIn(pwd){
+  return firebase.auth().signInWithEmailAndPassword(STAFF_EMAIL, pwd);
+}
+
+// A wrong password and a dead internet connection look the same to a member of
+// staff mid-service, so name which one it is.
+function signInErrorText(e){
+  const code = e && e.code;
+  if(code === "auth/network-request-failed") return "No internet. Check the connection and try again.";
+  if(code === "auth/too-many-requests")      return "Too many attempts. Wait a minute, then try again.";
+  if(code === "auth/user-disabled")          return "This staff account is disabled.";
+  return "Incorrect password. Try again.";
 }
 
 function closePwd(){
@@ -1589,7 +1624,8 @@ function markReady(id, queueNo){
     status:   "serving"
   }).catch(err=>{
     alert("Could not reach the display.\n\nError: " + (err && err.code ? err.code : err)
-      + "\n\nFirebase Console > Rules > add:\n\"queue_display\": { \".read\": true, \".write\": true }");
+      + "\n\nThis is a Database Rules problem. See SECURITY.md — do not"
+      + " open the path to everyone.");
   });
   toast("\ud83d\udce3 Calling #" + String(queueNo).padStart(3,"0"), "#16A34A");
 }
@@ -2008,15 +2044,15 @@ function renderReports(){
 function openAdminFromClosed(){
   const pwd = prompt("Enter staff password:");
   if(!pwd) return;
-  if(pwd === STAFF_PWD){
-    // Hide closed screen and go to Admin
-    const closed = document.getElementById("closed-screen");
-    if(closed) closed.style.display = "none";
-    switchView("admin");
-    renderAdmin();
-  } else {
-    alert("❌ Incorrect password. Please try again.");
-  }
+  staffSignIn(pwd)
+    .then(()=>{
+      // Hide closed screen and go to Admin
+      const closed = document.getElementById("closed-screen");
+      if(closed) closed.style.display = "none";
+      switchView("admin");
+      renderAdmin();
+    })
+    .catch(e=>alert("❌ " + signInErrorText(e)));
 }
 
 function renderStallStatus(){
@@ -2898,6 +2934,22 @@ firebase.initializeApp(FB_CONFIG);
 const db = firebase.database();
 const ordersRef = db.ref("orders");
 
+// ── STAFF SESSION ─────────────────────────────────────────────────────────────
+// Firebase remembers the signed-in account in this browser, so the kitchen
+// tablet survives a refresh without being asked for the password again. The
+// old flag lived only in memory and was lost on every reload.
+let _ordersLive = false;
+function startOrdersLive(){
+  if(_ordersLive) return;
+  _ordersLive = true;
+  attachOrdersListener();
+}
+
+firebase.auth().onAuthStateChanged(user=>{
+  _authed = !!user;
+  if(user) startOrdersLive();
+});
+
 // Listen for stall status changes — syncs open/close to all devices
 db.ref("stall_status").on("value", snap=>{
   const data = snap.val();
@@ -3118,6 +3170,11 @@ setInterval(()=>{
   }
 }, 5000);
 
+// Every order in the stall — staff only. Customers never needed this feed
+// (their own order is tracked one-by-id, and queue numbers come from the
+// queue counter), and once the rules require a sign-in to list orders, an
+// unsigned-in phone is refused it anyway. So it starts at sign-in, not load.
+function attachOrdersListener(){
 ordersRef.on("value", snap=>{
   const data = snap.val();
   orders = data ? Object.values(data) : [];
@@ -3148,6 +3205,7 @@ ordersRef.on("value", snap=>{
   renderReports();
   renderDisplay();
 });
+}
 
 // ── QUEUE DISPLAY (?display=1) ───────────────────────────────────────────────
 // The queue display now lives in its own file (nie-display.html), the same
@@ -3523,7 +3581,7 @@ setInterval(()=>{ const el=document.getElementById("lang-switch"); if(el && !el.
     <input id="pwd-input" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')checkPwd()"
       style="width:100%;padding:14px 16px;font-size:16px;border:2px solid #E5E0D8;border-radius:12px;margin-bottom:8px;text-align:center;letter-spacing:0.2em;outline:none">
     <div id="pwd-error" style="font-size:12px;color:#DC2626;margin-bottom:12px;min-height:18px"></div>
-    <button onclick="checkPwd()" style="width:100%;padding:14px;background:#C4572A;color:#fff;border-radius:12px;font-size:15px;font-weight:600;margin-bottom:10px">Enter</button>
+    <button id="pwd-enter" onclick="checkPwd()" style="width:100%;padding:14px;background:#C4572A;color:#fff;border-radius:12px;font-size:15px;font-weight:600;margin-bottom:10px">Enter</button>
     <button onclick="closePwd()" style="width:100%;padding:10px;background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:12px;font-size:13px">Cancel</button>
   </div>
 </div>
