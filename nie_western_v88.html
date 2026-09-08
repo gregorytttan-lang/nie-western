@@ -159,6 +159,8 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <button onclick="adminTab('reports')" id="atab-reports" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:400">📊 Reports</button>
     <button onclick="adminTab('printer')" id="atab-printer" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:400">🖨️ Printer</button>
     <button onclick="if(confirm('Reset menu?'))resetMenu()" style="margin-left:auto;background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 12px;font-size:12px">Reset</button>
+    <button onclick="staffSignOut()" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 12px;font-size:12px">🔒 Sign out</button>
+    <span id="build-stamp" style="font-size:11px;color:#A8A29E;align-self:center"></span>
   </div>
   <div id="admin-menu-mgmt"></div>
   <div id="admin-reports" class="hidden"></div>
@@ -831,22 +833,40 @@ function checkPwd(){
   if(!val){ err.textContent = "Enter the password."; return; }
   err.textContent = "Signing in…";
   if(btn) btn.disabled = true;
-  staffSignIn(val)
-    .then(()=>{
+  staffSignIn(val).then(
+    ()=>{
       err.textContent = "";
       closePwd();
       if(_pendingView){ showView(_pendingView); _pendingView=null; }
-    })
-    .catch(e=>{
+    },
+    e=>{
       err.textContent = signInErrorText(e);
       document.getElementById("pwd-input").value = "";
       document.getElementById("pwd-input").focus();
-    })
-    .then(()=>{ if(btn) btn.disabled = false; });
+    }
+  ).then(()=>{ if(btn) btn.disabled = false; });
 }
 
 function staffSignIn(pwd){
   return firebase.auth().signInWithEmailAndPassword(STAFF_EMAIL, pwd);
+}
+
+// Locks the tablet at the end of a shift, and is the only way to check that
+// the password gate still works — Firebase keeps the session across reloads,
+// so without this a signed-in tablet is never asked again and a wrong password
+// appears to be accepted.
+function staffSignOut(){
+  if(!confirm("Sign out of staff access on this device?")) return;
+  firebase.auth().signOut()
+    .then(()=>{
+      // Drop the staff-only order feed; onAuthStateChanged clears _authed.
+      try{ ordersRef.off(); }catch(e){}
+      _ordersLive = false;
+      orders = [];
+      showView("menu");
+      toast("🔒 Signed out", "#78716C");
+    })
+    .catch(e=>alert("Could not sign out: " + (e && e.message ? e.message : e)));
 }
 
 // A wrong password and a dead internet connection look the same to a member of
@@ -856,7 +876,13 @@ function signInErrorText(e){
   if(code === "auth/network-request-failed") return "No internet. Check the connection and try again.";
   if(code === "auth/too-many-requests")      return "Too many attempts. Wait a minute, then try again.";
   if(code === "auth/user-disabled")          return "This staff account is disabled.";
-  return "Incorrect password. Try again.";
+  if(code === "auth/invalid-credential" || code === "auth/wrong-password" ||
+     code === "auth/user-not-found"      || code === "auth/invalid-email"){
+    return "Incorrect password. Try again.";
+  }
+  // Anything else is not a wrong password. Saying so sends staff hunting for a
+  // typo while the real fault goes unreported.
+  return "Sign-in failed: " + (code || (e && e.message) || e);
 }
 
 function closePwd(){
@@ -2044,15 +2070,16 @@ function renderReports(){
 function openAdminFromClosed(){
   const pwd = prompt("Enter staff password:");
   if(!pwd) return;
-  staffSignIn(pwd)
-    .then(()=>{
+  staffSignIn(pwd).then(
+    ()=>{
       // Hide closed screen and go to Admin
       const closed = document.getElementById("closed-screen");
       if(closed) closed.style.display = "none";
-      switchView("admin");
+      showView("admin");        // switchView has never been defined in this file
       renderAdmin();
-    })
-    .catch(e=>alert("❌ " + signInErrorText(e)));
+    },
+    e=>alert("❌ " + signInErrorText(e))
+  );
 }
 
 function renderStallStatus(){
@@ -2938,6 +2965,15 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so the kitchen
 // tablet survives a refresh without being asked for the password again. The
 // old flag lived only in memory and was lost on every reload.
+// Shown in Admin so a device serving a cached older copy can be spotted at a
+// glance. A stale staff device cannot read orders under the current rules, and
+// without this the only symptom is a kitchen screen that stays empty.
+const BUILD = "2026-09-08b";
+try{
+  const _bs = document.getElementById("build-stamp");
+  if(_bs) _bs.textContent = "v" + BUILD;
+}catch(e){}
+
 let _ordersLive = false;
 function startOrdersLive(){
   if(_ordersLive) return;
