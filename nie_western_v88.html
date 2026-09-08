@@ -159,6 +159,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     <button onclick="adminTab('reports')" id="atab-reports" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:400">📊 Reports</button>
     <button onclick="adminTab('printer')" id="atab-printer" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:400">🖨️ Printer</button>
     <button onclick="if(confirm('Reset menu?'))resetMenu()" style="margin-left:auto;background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 12px;font-size:12px">Reset</button>
+    <button onclick="staffSignOut()" style="background:transparent;color:#78716C;border:1px solid #E5E0D8;border-radius:8px;padding:9px 12px;font-size:12px">🔒 Sign out</button>
   </div>
   <div id="admin-menu-mgmt"></div>
   <div id="admin-reports" class="hidden"></div>
@@ -847,6 +848,24 @@ function checkPwd(){
 
 function staffSignIn(pwd){
   return firebase.auth().signInWithEmailAndPassword(STAFF_EMAIL, pwd);
+}
+
+// Locks the tablet at the end of a shift, and is the only way to check that
+// the password gate still works — Firebase keeps the session across reloads,
+// so without this a signed-in tablet is never asked again and a wrong password
+// appears to be accepted.
+function staffSignOut(){
+  if(!confirm("Sign out of staff access on this device?")) return;
+  firebase.auth().signOut()
+    .then(()=>{
+      // Drop the staff-only order feed; onAuthStateChanged clears _authed.
+      try{ ordersRef.off(); }catch(e){}
+      _ordersLive = false;
+      orders = [];
+      showView("menu");
+      toast("🔒 Signed out", "#78716C");
+    })
+    .catch(e=>alert("Could not sign out: " + (e && e.message ? e.message : e)));
 }
 
 // A wrong password and a dead internet connection look the same to a member of
