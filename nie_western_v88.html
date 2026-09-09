@@ -2981,10 +2981,17 @@ function startOrdersLive(){
   attachOrdersListener();
 }
 
-firebase.auth().onAuthStateChanged(user=>{
-  _authed = !!user;
-  if(user) startOrdersLive();
-});
+// Guarded: if the auth SDK failed to load (blocked CDN, dead network), a bare
+// firebase.auth() throws here and takes every statement after it down with it —
+// including the customer menu, which needs no sign-in at all.
+try{
+  firebase.auth().onAuthStateChanged(user=>{
+    _authed = !!user;
+    if(user) startOrdersLive();
+  });
+}catch(e){
+  console.warn("Firebase Auth unavailable; staff sign-in will not work.", e);
+}
 
 // Listen for stall status changes — syncs open/close to all devices
 db.ref("stall_status").on("value", snap=>{

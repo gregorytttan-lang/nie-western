@@ -96,6 +96,41 @@ Both use a different path prefix — `nie_western/orders` and
 page can reach the database. They are leftovers from the original README setup,
 superseded by v88, and they are still served publicly by GitHub Pages.
 
+## Rules for the current two-file setup
+
+```json
+"orders": {
+  ".read":  "auth != null",
+  ".write": "auth != null",
+  "$orderId": {
+    ".read":  true,
+    ".write": true
+  }
+}
+```
+
+`$orderId` write stays open to the public deliberately. Two client behaviours
+require it and neither can be narrowed from the rules alone:
+
+* v2 fills the queue number in with a second write after the order is saved
+  (`nie_western_v2.html:1933-1942`).
+* `saveOrderConfirmed` retries a full `set()` up to three times on a 7s timeout
+  (`nie_western_v2.html:4583`). If the first write lands but the acknowledgement
+  is lost, the retry targets an order that now exists. A create-only rule would
+  reject it and show the customer a failure for an order that is in fact saved.
+
+What that leaves closed, which is the part that matters:
+
+* **Listing orders needs a sign-in** — the sales history cannot be read.
+* **Writing at `/orders` itself needs a sign-in**, so `ordersRef.remove()` —
+  wiping every order at once — is refused to the public. The `.write` at the
+  `orders` level is what gives staff back their bulk operations; the public
+  falls through it to `$orderId`.
+* `archives`, `payouts` and `float` stay staff-only both ways.
+
+Residual: someone who already knows a specific order id can alter or delete that
+one order. They cannot enumerate ids, because listing is denied.
+
 ## Customers and staff run different files — the root of the 2026-09-09 incident
 
 The kitchen tablet runs `nie_western_v88.html`. The customer QR opens
