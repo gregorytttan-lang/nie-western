@@ -4377,8 +4377,18 @@ function buildReceiptText(o){
 
 function printReceipt(o){
   if(!o){ toast("Order not found", "#DC2626"); return; }
+  if(!o.queueNo){
+    toast("⏳ Waiting for the queue number…", "#C4572A");
+    withQueueNo(o).then(ready=>{
+      if(!ready){ toast("⚠️ No queue number yet — try again shortly", "#DC2626"); return; }
+      renderKitchen();
+      rawbtPrint(buildReceiptText(ready));
+      toast("\U0001f9fe Printing receipt for " + fmtQ(ready.queueNo), "#C4572A");
+    });
+    return;
+  }
   rawbtPrint(buildReceiptText(o));
-  toast("\U0001f9fe Printing receipt for " + fmtQ(o.queueNo||0), "#C4572A");
+  toast("\U0001f9fe Printing receipt for " + fmtQ(o.queueNo), "#C4572A");
 }
 
 function printReceiptById(id){
@@ -4389,16 +4399,50 @@ function printAllOrders(){
   const active = orders.filter(o=>o.status!=="collected");
   // Exclude snacks-only orders from printing
   const unprinted = active.filter(o=>!o.bulkPrinted && !o.snacksOnly);
-  if(!unprinted.length){ toast("No new orders to print.","#78716C"); return; }
+  // Hold back any order whose queue number has not landed yet. Printing it now
+  // gives a #000 ticket, and marking it bulkPrinted would stop it ever being
+  // reprinted with its real number.
+  const ready   = unprinted.filter(o=>o.queueNo);
+  const waiting = unprinted.filter(o=>!o.queueNo);
+  if(!ready.length){
+    toast(waiting.length
+      ? "⏳ Queue numbers still coming — tap again in a moment"
+      : "No new orders to print.", "#78716C");
+    return;
+  }
   // Sort by queue number so tickets print in order #001, #002, #003...
-  unprinted.sort((a,b)=>a.queueNo - b.queueNo);
-  toast("🖨️ Printing " + unprinted.length + " new tickets...", "#C4572A");
-  // Combine all unprinted tickets into one print job
-  const combined = unprinted.map(o=>buildTicketText(o)).join("");
+  ready.sort((a,b)=>a.queueNo - b.queueNo);
+  toast("🖨️ Printing " + ready.length + " new tickets..."
+        + (waiting.length ? " (" + waiting.length + " still waiting for a number)" : ""), "#C4572A");
+  // Combine the ready tickets into one print job
+  const combined = ready.map(o=>buildTicketText(o)).join("");
   rawbtPrint(combined);
-  // Mark all as bulk printed in Firebase (including snacks so they don't re-appear)
-  active.filter(o=>!o.bulkPrinted).forEach(o=>{
+  // Mark only what actually printed, plus snacks so they do not re-appear.
+  active.filter(o=>!o.bulkPrinted && (o.snacksOnly || ready.indexOf(o) !== -1)).forEach(o=>{
     ordersRef.child(o.id).update({bulkPrinted: true});
+  });
+}
+
+// confirmPayment saves the order first and issues the queue number a moment
+// later, so an order arrives on the kitchen screen with queueNo 0 and gains its
+// real number a second afterwards. Printing inside that window puts #000 on the
+// ticket while the screen goes on to show the real number — leaving the kitchen
+// matching tickets to orders by their items. Wait for the number instead.
+function withQueueNo(o, timeoutMs){
+  return new Promise(resolve=>{
+    if(!o){ resolve(null); return; }
+    if(o.queueNo){ resolve(o); return; }
+    const ref = ordersRef.child(o.id).child("queueNo");
+    let settled = false;
+    const finish = n => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try{ ref.off("value", cb); }catch(e){}
+      if(n){ o.queueNo = n; resolve(o); } else { resolve(null); }
+    };
+    const cb = ref.on("value", snap=>{ const n = snap.val(); if(n) finish(n); });
+    const timer = setTimeout(()=>finish(o.queueNo || 0), timeoutMs || 6000);
   });
 }
 
@@ -4406,6 +4450,20 @@ function printTicket(o, isAuto=false){
   // Don't print snacks-only orders
   if(o && o.snacksOnly){
     toast("⚠️ Snacks order — no print needed", "#78716C");
+    return;
+  }
+  if(o && !o.queueNo){
+    toast("⏳ Waiting for the queue number…", "#C4572A");
+    withQueueNo(o).then(ready=>{
+      if(!ready){
+        // Never print #000 — a ticket the kitchen cannot match is worse than
+        // no ticket. The order itself is already safely saved.
+        toast("⚠️ No queue number yet — order is safe, tap 🖨️ again shortly", "#DC2626");
+        return;
+      }
+      renderKitchen();
+      rawbtPrint(buildTicketText(ready), isAuto);
+    });
     return;
   }
   rawbtPrint(buildTicketText(o), isAuto);
@@ -4478,7 +4536,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-09-09-v2";
+const BUILD = "2026-09-09-v2b";
 try{
   const _bs = document.getElementById("build-stamp");
   if(_bs) _bs.textContent = "v" + BUILD;
