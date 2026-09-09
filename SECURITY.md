@@ -96,6 +96,50 @@ Both use a different path prefix — `nie_western/orders` and
 page can reach the database. They are leftovers from the original README setup,
 superseded by v88, and they are still served publicly by GitHub Pages.
 
+## Customers and staff run different files — the root of the 2026-09-09 incident
+
+The kitchen tablet runs `nie_western_v88.html`. The customer QR opens
+**`nie_western_v2.html`**. Everything below follows from that split.
+
+The final rules of 2026-09-08 allowed the public to create an order but not to
+alter one:
+
+```json
+"$orderId": { ".read": true, ".write": "!data.exists() || auth != null" }
+```
+
+That was verified against v88, where `nextQ()` resolves before the record is
+built, so the queue number is present on the single create. **v2 does it the
+other way round** (`nie_western_v2.html:1933-1942`): it saves the order first,
+then issues the number and fills it in with a second write —
+
+```js
+ordersRef.child(o.id).update({queueNo}).catch(()=>{});
+```
+
+— which the rule refused. The `.catch(()=>{})` discards the error, so nothing
+surfaced anywhere. The customer's phone showed the number from its own local
+variable while the stored record had none, and the kitchen rendered `#000`.
+
+Relaxed to `".write": true` on `$orderId` on 2026-09-09 to restore service.
+Reading the order list still requires a sign-in, so the sales history stays
+closed; what is open again is altering or deleting a single order whose id you
+already know.
+
+### Consequences of the split still outstanding
+
+* **v2 still contains `STAFF_PWD: "123456789"`** (line 431) and its Admin view is
+  reachable by anyone. The rules are what protect the data now: an intruder
+  reaching that screen gets empty tables, because v2 never signs in to Firebase
+  and cannot read `orders`, `archives`, `payouts` or `float`. What they *can*
+  still do is toggle item availability and tamper with `queue_display` and
+  `board_soldout`, all of which remain world-writable for the display tablet.
+* **The security work in #1 and #2 landed only in v88** — the file customers do
+  not use. v2 has no Firebase sign-in at all.
+* **Two files sharing one database is the underlying fault.** Any rule tight
+  enough to be worth having has to be checked against both, and this one was
+  checked against one. Consolidating on a single file is the durable fix.
+
 ## Status
 
 Closed as of 2026-09-08, verified against the live database:
