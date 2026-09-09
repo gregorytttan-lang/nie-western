@@ -96,6 +96,152 @@ Both use a different path prefix — `nie_western/orders` and
 page can reach the database. They are leftovers from the original README setup,
 superseded by v88, and they are still served publicly by GitHub Pages.
 
+## Consolidating on v2 — rules it needs that the current set lacks
+
+v2 uses two Firebase paths v88 never touched, and neither has a rule today.
+Unlisted paths default to denied, so moving the kitchen tablet to v2 without
+this change makes stock counting and the daily special fail silently.
+
+Both are written by **customers**, not only staff, so neither can be locked to
+`auth != null`:
+
+* `stock` — `decrementStock()` (`nie_western_v2.html:4800`) runs in the customer
+  order-completion path (called at :1949 and :1991) and decrements
+  `stock/<itemId>` by transaction.
+* `special/qtyLeft` — `reserveSpecial()` (:1522) and `releaseSpecial()` (:1539)
+  adjust it as a customer adds or removes the special from their cart.
+
+The rest of `special` (name, price, active, usualPrice) is set from Admin only,
+so it stays staff-write with `qtyLeft` carved out.
+
+```json
+{
+  "rules": {
+    "orders": {
+      ".read":  "auth != null",
+      ".write": "auth != null",
+      "$orderId": { ".read": true, ".write": true }
+    },
+
+    "archives":      { ".read": "auth != null", ".write": "auth != null" },
+    "payouts":       { ".read": "auth != null", ".write": "auth != null" },
+    "float":         { ".read": "auth != null", ".write": "auth != null" },
+    "stall_status":  { ".read": true,           ".write": "auth != null" },
+
+    "special": {
+      ".read":  true,
+      ".write": "auth != null",
+      "qtyLeft": { ".write": true }
+    },
+
+    "stock":         { ".read": true, ".write": true },
+    "queue":         { ".read": true, ".write": true },
+    "queue_display": { ".read": true, ".write": true },
+    "availability":  { ".read": true, ".write": true },
+    "board_soldout": { ".read": true, ".write": true }
+  }
+}
+```
+
+Safe to apply before the switch: v88 uses neither path, so the additions are
+inert until the tablet moves.
+
+### The menu is per-device, and does not sync
+
+`menu` is read from `localStorage` (`CONFIG.MENU_KEY`, `menu_nie_v7`) and saved
+back there — it never goes to Firebase. Only `availability`, `stock` and
+`special` sync between devices. So a price or item edited in Admin changes that
+one device and no other, and a customer's phone renders `DEFAULT_MENU` unless it
+has its own cached copy.
+
+v88 makes this worse with a bug of its own: it reads `CONFIG.MENU_KEY` (`v7`)
+but `saveMenu()` writes to `menu_nie_v6` (`nie_western_v88.html:807`), so menu
+edits made in v88's Admin were never read back at all. v2 reads and writes the
+same key and is correct.
+
+Consequence for the switch: check the menu on v2 before trusting it for a
+service. This is a pre-existing limitation, not something the consolidation
+introduces, and it is worth fixing separately.
+
+## Rules for the current two-file setup
+
+```json
+"orders": {
+  ".read":  "auth != null",
+  ".write": "auth != null",
+  "$orderId": {
+    ".read":  true,
+    ".write": true
+  }
+}
+```
+
+`$orderId` write stays open to the public deliberately. Two client behaviours
+require it and neither can be narrowed from the rules alone:
+
+* v2 fills the queue number in with a second write after the order is saved
+  (`nie_western_v2.html:1933-1942`).
+* `saveOrderConfirmed` retries a full `set()` up to three times on a 7s timeout
+  (`nie_western_v2.html:4583`). If the first write lands but the acknowledgement
+  is lost, the retry targets an order that now exists. A create-only rule would
+  reject it and show the customer a failure for an order that is in fact saved.
+
+What that leaves closed, which is the part that matters:
+
+* **Listing orders needs a sign-in** — the sales history cannot be read.
+* **Writing at `/orders` itself needs a sign-in**, so `ordersRef.remove()` —
+  wiping every order at once — is refused to the public. The `.write` at the
+  `orders` level is what gives staff back their bulk operations; the public
+  falls through it to `$orderId`.
+* `archives`, `payouts` and `float` stay staff-only both ways.
+
+Residual: someone who already knows a specific order id can alter or delete that
+one order. They cannot enumerate ids, because listing is denied.
+
+## Customers and staff run different files — the root of the 2026-09-09 incident
+
+The kitchen tablet runs `nie_western_v88.html`. The customer QR opens
+**`nie_western_v2.html`**. Everything below follows from that split.
+
+The final rules of 2026-09-08 allowed the public to create an order but not to
+alter one:
+
+```json
+"$orderId": { ".read": true, ".write": "!data.exists() || auth != null" }
+```
+
+That was verified against v88, where `nextQ()` resolves before the record is
+built, so the queue number is present on the single create. **v2 does it the
+other way round** (`nie_western_v2.html:1933-1942`): it saves the order first,
+then issues the number and fills it in with a second write —
+
+```js
+ordersRef.child(o.id).update({queueNo}).catch(()=>{});
+```
+
+— which the rule refused. The `.catch(()=>{})` discards the error, so nothing
+surfaced anywhere. The customer's phone showed the number from its own local
+variable while the stored record had none, and the kitchen rendered `#000`.
+
+Relaxed to `".write": true` on `$orderId` on 2026-09-09 to restore service.
+Reading the order list still requires a sign-in, so the sales history stays
+closed; what is open again is altering or deleting a single order whose id you
+already know.
+
+### Consequences of the split still outstanding
+
+* **v2 still contains `STAFF_PWD: "123456789"`** (line 431) and its Admin view is
+  reachable by anyone. The rules are what protect the data now: an intruder
+  reaching that screen gets empty tables, because v2 never signs in to Firebase
+  and cannot read `orders`, `archives`, `payouts` or `float`. What they *can*
+  still do is toggle item availability and tamper with `queue_display` and
+  `board_soldout`, all of which remain world-writable for the display tablet.
+* **The security work in #1 and #2 landed only in v88** — the file customers do
+  not use. v2 has no Firebase sign-in at all.
+* **Two files sharing one database is the underlying fault.** Any rule tight
+  enough to be worth having has to be checked against both, and this one was
+  checked against one. Consolidating on a single file is the durable fix.
+
 ## Status
 
 Closed as of 2026-09-08, verified against the live database:
@@ -103,7 +249,7 @@ Closed as of 2026-09-08, verified against the live database:
 | Item | State |
 |------|-------|
 | Public read of `/orders` | **Closed** — verified `Permission denied` while signed out |
-| Public write/delete of `/orders` | **Closed** — creating a new order still allowed, altering an existing one is not |
+| Public write/delete of `/orders` | **Partly closed** — listing and wiping all orders need a sign-in; a single order stays writable by id (see the two-file section below for why) |
 | Public read/write of `archives`, `payouts`, `float` | **Closed** — staff only, both directions |
 | Public write of `stall_status` | **Closed** — public may read it, only staff may set it |
 | `STAFF_PWD` in `nie_western_v88.html` | **Removed** — sign-in goes to Firebase Authentication |
