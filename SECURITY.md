@@ -182,7 +182,7 @@ Closed as of 2026-09-08, verified against the live database:
 | Item | State |
 |------|-------|
 | Public read of `/orders` | **Closed** — verified `Permission denied` while signed out |
-| Public write/delete of `/orders` | **Closed** — creating a new order still allowed, altering an existing one is not |
+| Public write/delete of `/orders` | **Partly closed** — listing and wiping all orders need a sign-in; a single order stays writable by id (see the two-file section below for why) |
 | Public read/write of `archives`, `payouts`, `float` | **Closed** — staff only, both directions |
 | Public write of `stall_status` | **Closed** — public may read it, only staff may set it |
 | `STAFF_PWD` in `nie_western_v88.html` | **Removed** — sign-in goes to Firebase Authentication |
