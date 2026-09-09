@@ -96,6 +96,73 @@ Both use a different path prefix — `nie_western/orders` and
 page can reach the database. They are leftovers from the original README setup,
 superseded by v88, and they are still served publicly by GitHub Pages.
 
+## Consolidating on v2 — rules it needs that the current set lacks
+
+v2 uses two Firebase paths v88 never touched, and neither has a rule today.
+Unlisted paths default to denied, so moving the kitchen tablet to v2 without
+this change makes stock counting and the daily special fail silently.
+
+Both are written by **customers**, not only staff, so neither can be locked to
+`auth != null`:
+
+* `stock` — `decrementStock()` (`nie_western_v2.html:4800`) runs in the customer
+  order-completion path (called at :1949 and :1991) and decrements
+  `stock/<itemId>` by transaction.
+* `special/qtyLeft` — `reserveSpecial()` (:1522) and `releaseSpecial()` (:1539)
+  adjust it as a customer adds or removes the special from their cart.
+
+The rest of `special` (name, price, active, usualPrice) is set from Admin only,
+so it stays staff-write with `qtyLeft` carved out.
+
+```json
+{
+  "rules": {
+    "orders": {
+      ".read":  "auth != null",
+      ".write": "auth != null",
+      "$orderId": { ".read": true, ".write": true }
+    },
+
+    "archives":      { ".read": "auth != null", ".write": "auth != null" },
+    "payouts":       { ".read": "auth != null", ".write": "auth != null" },
+    "float":         { ".read": "auth != null", ".write": "auth != null" },
+    "stall_status":  { ".read": true,           ".write": "auth != null" },
+
+    "special": {
+      ".read":  true,
+      ".write": "auth != null",
+      "qtyLeft": { ".write": true }
+    },
+
+    "stock":         { ".read": true, ".write": true },
+    "queue":         { ".read": true, ".write": true },
+    "queue_display": { ".read": true, ".write": true },
+    "availability":  { ".read": true, ".write": true },
+    "board_soldout": { ".read": true, ".write": true }
+  }
+}
+```
+
+Safe to apply before the switch: v88 uses neither path, so the additions are
+inert until the tablet moves.
+
+### The menu is per-device, and does not sync
+
+`menu` is read from `localStorage` (`CONFIG.MENU_KEY`, `menu_nie_v7`) and saved
+back there — it never goes to Firebase. Only `availability`, `stock` and
+`special` sync between devices. So a price or item edited in Admin changes that
+one device and no other, and a customer's phone renders `DEFAULT_MENU` unless it
+has its own cached copy.
+
+v88 makes this worse with a bug of its own: it reads `CONFIG.MENU_KEY` (`v7`)
+but `saveMenu()` writes to `menu_nie_v6` (`nie_western_v88.html:807`), so menu
+edits made in v88's Admin were never read back at all. v2 reads and writes the
+same key and is correct.
+
+Consequence for the switch: check the menu on v2 before trusting it for a
+service. This is a pre-existing limitation, not something the consolidation
+introduces, and it is worth fixing separately.
+
 ## Rules for the current two-file setup
 
 ```json
