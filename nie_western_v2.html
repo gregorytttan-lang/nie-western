@@ -1250,11 +1250,18 @@ function handleAdd(id){
     }
   }
 
-  // Already in the cart — just bump the quantity and keep the sides the
-  // customer already picked. Ordering 3 chicken chops is now 3 taps instead
-  // of walking through the options popup 3 times.
+  // Already in the cart. For an item with no options there is nothing to ask,
+  // so tapping again is simply another one of the same.
+  //
+  // For an item WITH options this used to do the same thing — bump the
+  // quantity and reuse the previous sides — which saved taps but made a
+  // second one with different sides impossible to order. A customer wanting
+  // one chicken chop with bolognese and another with mushroom cream had no
+  // way to say so. The popup now reopens pre-filled with the last choices, so
+  // "same again" is still one extra tap and a different sauce is possible.
   const existing = cart.filter(x=>x.id===id);
-  if(existing.length){
+  const hasMods  = item.modifiers && item.modifiers.length > 0;
+  if(existing.length && !hasMods){
     existing[existing.length-1].qty++;
     renderMenu();
     return;
@@ -1295,7 +1302,10 @@ function handleAdd(id){
       })};
 
     if(filteredItem.modifiers.length>0){
-      modItem = filteredItem; modChoices = {};
+      modItem = filteredItem;
+      modChoices = existing.length
+        ? prefillChoices(filteredItem, existing[existing.length-1].choices)
+        : {};
       openModModal(filteredItem);
     } else {
       addToCart(item, {});
@@ -1303,6 +1313,29 @@ function handleAdd(id){
   } else {
     addToCart(item, {});
   }
+}
+
+// Carries the previous choices into a reopened popup, dropping anything no
+// longer on offer — a side that has since sold out, rice that ran out — so a
+// customer cannot re-order something the stall can no longer make.
+function prefillChoices(filteredItem, previous){
+  const out = {};
+  if(!previous) return out;
+  (filteredItem.modifiers || []).forEach(mod=>{
+    const prev = previous[mod.id];
+    if(prev === undefined || prev === null) return;
+    const names = (mod.options || []).map(o=>o.name || o);
+    if(Array.isArray(prev)){
+      const kept = prev
+        .filter(pchoice=>names.indexOf(pchoice.name || pchoice) !== -1)
+        .map(pchoice=>({name: pchoice.name || pchoice, price: pchoice.price || 0}));
+      if(kept.length) out[mod.id] = kept;
+    } else {
+      const name = prev.name || prev;
+      if(names.indexOf(name) !== -1) out[mod.id] = {name, price: prev.price || 0};
+    }
+  });
+  return out;
 }
 
 function addToCart(item, choices){
@@ -4536,7 +4569,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-09-09-v2b";
+const BUILD = "2026-09-10-v2c";
 try{
   const _bs = document.getElementById("build-stamp");
   if(_bs) _bs.textContent = "v" + BUILD;
