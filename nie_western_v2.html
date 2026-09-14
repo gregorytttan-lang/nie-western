@@ -517,6 +517,8 @@ const CN = {
     "Tempura Fish & Chips":"天妇罗炸鱼薯条",
     "Tempura Fish":"天妇罗鱼",
     "Garden Salad":"花园沙拉",
+    "Vegetarian Shawarma":"素食沙威玛",
+    "A meat-free wrap, packed with flavour.":"无肉卷饼，风味十足。",
     "Mushroom Soup":"蘑菇汤",
     "Spaghetti Chicken Bolognese":"鸡肉肉酱意大利面",
     "Spaghetti Mushroom Cream":"蘑菇奶油意大利面",
@@ -791,6 +793,12 @@ const DEFAULT_MENU = [
     {id:"sh2",name:"Mixed Shawarma (Beef & Chicken)",price:6.90,desc:"The best of beef and chicken together in one satisfying wrap.",modifiers:[shawSide(0),SHAW_MEAT]},
     {id:"sh7",name:"Beef Shawarma",price:5.90,desc:"Juicy seasoned beef wrapped up with bold Middle Eastern flavour.",modifiers:[shawSide(1.00),SHAW_MEAT]},
     {id:"sh11",name:"Chicken Shawarma",price:4.90,desc:"Tender spiced chicken wrapped up and ready to devour.",modifiers:[shawSide(1.00),SHAW_MEAT]},
+    // No modifiers: served as a wrap only, and the extra-meat option is
+    // deliberately left off a vegetarian item.
+    {id:"sh12",name:"Vegetarian Shawarma",price:4.90,desc:"A meat-free wrap, packed with flavour."},
+    // Kept its f12 id from when it sat under Fish Mains — stock counts and
+    // availability in Firebase are keyed by item id.
+    {id:"f12",name:"Garden Salad",price:4.50,desc:"Fresh crisp greens tossed lightly — clean and refreshing."},
   ]},
   {id:"c2",name:"Chicken Mains",emoji:"🍗",items:[
     {id:"m1",name:"Garlic Soya Korean Fried Chicken with Spaghetti",price:6.50,desc:"Korean fried chicken meets spaghetti in one bold flavour combo.",modifiers:[SAUCE,SIDE]},
@@ -819,7 +827,6 @@ const DEFAULT_MENU = [
     
     {id:"f8",name:"Fish & Chips",price:4.80,desc:"Classic crispy fish with golden fries — a timeless combo.",modifiers:[SIDE]},
     {id:"f9",name:"Tempura Fish & Chips",price:4.80,desc:"Light airy tempura batter, golden fries and a fresh side salad.",modifiers:[SIDE]},
-    {id:"f12",name:"Garden Salad",price:4.50,desc:"Fresh crisp greens tossed lightly — clean and refreshing."},
     {id:"f11",name:"Mushroom Soup",price:2.00,desc:"Warm velvety mushroom soup — comfort in a bowl."},
   ]},
   {id:"c4",name:"Spaghetti",emoji:"🍝",items:[
@@ -4569,7 +4576,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-09-10-v2c";
+const BUILD = "2026-09-14-v2d";
 try{
   const _bs = document.getElementById("build-stamp");
   if(_bs) _bs.textContent = "v" + BUILD;
