@@ -442,7 +442,12 @@ const CONFIG = {
   STAFF_EMAIL:  "staff@niewestern.local",
   WA_NUMBERS:   ["6590628726", "6581612943"],
   SHEETS_URL:   "https://script.google.com/macros/s/AKfycbw-ZSqLtKFDJT2QDO0erE4Vr-yBVN7tllYpaQ615I2Po3GO82HD3fPcsWNwhYRixrbAlQ/exec",
-  MENU_KEY:     "menu_nie_v7",
+  // Bumped from v7: every device was holding a stale cached menu written by
+  // the availability listener above. A new key makes each device read
+  // DEFAULT_MENU once. Sold-out state is unaffected — it lives in Firebase.
+  // Prices edited in Admin were per-device only and never reached customers;
+  // those revert to the prices in this file, which is where they belong.
+  MENU_KEY:     "menu_nie_v8",
   BREAKFAST_CUTOFF: 10 * 60 + 45,  // 10:45 AM in minutes
   RAWBT_PORT:   40213,
   // Shown on customer receipts. Licensed hawker stall - no UEN, so the SFA
@@ -4576,7 +4581,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-09-14-v2d";
+const BUILD = "2026-09-14-v2e";
 try{
   const _bs = document.getElementById("build-stamp");
   if(_bs) _bs.textContent = "v" + BUILD;
@@ -4628,7 +4633,13 @@ db.ref("availability").on("value", snap=>{
       item.avail = data.hasOwnProperty(item.id) ? (data[item.id] === false ? false : true) : true;
     });
   });
-  saveMenu();
+  // Deliberately NOT saved. This listener runs on every device, customer
+  // phones included, and saving here wrote the whole menu into localStorage on
+  // first visit. The app then read that stale copy forever, so an item added
+  // to DEFAULT_MENU could only ever be seen by a phone that had never opened
+  // the app before — which is why a new menu item never reached returning
+  // customers. Availability arrives from Firebase on every load anyway, so
+  // there is nothing here worth persisting.
   renderMenu();
 });
 
