@@ -48,7 +48,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     🥩 <span style="color:#C4572A">NIE</span> Western
   </div>
   <button onclick="showView('menu')" id="nav-menu" style="background:transparent;color:#C4572A;padding:0 10px;border-bottom:2px solid #C4572A;font-size:12px;font-weight:600;min-width:72px">🧾 Order</button>
-  <button onclick="authView('kitchen')" id="nav-kitchen" style="background:transparent;color:#78716C;padding:0 10px;border-bottom:2px solid transparent;font-size:12px;font-weight:400;min-width:72px;position:relative">👨‍🍳 Kitchen<span id="kitchen-badge" class="hidden" style="position:absolute;top:6px;right:4px;background:#DC2626;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center"></span></button>
+  <button onclick="authView('kitchen')" id="nav-kitchen" style="background:transparent;-webkit-appearance:none;appearance:none;border:0;color:#78716C;padding:0 10px;border-bottom:2px solid transparent;font-size:12px;font-weight:400;min-width:72px"><span style="position:relative;display:inline-block">👨‍🍳 Kitchen<span id="kitchen-badge" class="hidden" style="position:absolute;top:-6px;right:-10px;background:#DC2626;color:#fff;border-radius:50%;min-width:16px;height:16px;line-height:16px;text-align:center;padding:0 3px;font-size:9px;font-weight:700"></span></span></button>
   <button onclick="authView('admin')" id="nav-admin" style="background:transparent;color:#78716C;padding:0 10px;border-bottom:2px solid transparent;font-size:12px;font-weight:400;min-width:72px">⚙️ Admin</button>
 </nav>
 
@@ -2422,8 +2422,8 @@ function updateKitchenBadge(){
   const n = orders.filter(o=>(o.status==="paid"||o.status==="preparing")
     && (o.needsKitchen!==false || o.snacksOnly)).length;
   const b = document.getElementById("kitchen-badge");
-  if(n>0){ b.classList.remove("hidden"); b.style.display="flex"; b.textContent=n; }
-  else { b.classList.add("hidden"); }
+  if(n>0){ b.classList.remove("hidden"); b.style.display="inline-block"; b.textContent=n; }
+  else { b.classList.add("hidden"); b.style.display=""; }
 }
 
 // Take & Go orders never reached this screen - they skip the kitchen by
