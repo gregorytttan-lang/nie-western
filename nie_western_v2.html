@@ -257,6 +257,10 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <div style="font-size:11px;color:#92400E;font-weight:700;margin-bottom:2px">CUSTOMER WROTE</div>
       <div id="reply-remarks-text" style="font-size:15px;color:#78350F;font-weight:600"></div>
     </div>
+    <div id="reply-custreply" class="hidden" style="background:#FFF7ED;border:2px solid #FB923C;border-radius:10px;padding:10px 12px;margin-bottom:16px">
+      <div style="font-size:11px;color:#9A3412;font-weight:700;margin-bottom:2px">↩️ CUSTOMER REPLIED</div>
+      <div id="reply-custreply-text" style="font-size:16px;color:#7C2D12;font-weight:700"></div>
+    </div>
     <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Quick replies</div>
     <div id="reply-presets"></div>
     <div style="font-size:11px;color:#78716C;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin:16px 0 8px">Or type your own</div>
@@ -2251,6 +2255,7 @@ function closeQueue(){
   const rb = document.getElementById("staff-reply-box");
   if(rb){ rb.classList.add("hidden"); rb.innerHTML=""; }
   lastReplyShown = null;
+  lastReplySig = null;
   lastCashState = null;
   // Restore hidden elements for next order
   const qLabel = document.getElementById("queue-no-label");
@@ -2471,6 +2476,7 @@ function renderTakeGo(){
 
 function renderKitchen(){
   renderTakeGo();
+  checkNewCustomerReplies();
   // Only orders explicitly flagged as no-kitchen are hidden. Older orders saved
   // without the flag default to visible — fail safe rather than silently vanish.
   // "pending" = payment screen opened but not confirmed. Not a real order yet.
@@ -2548,8 +2554,9 @@ function renderKitchen(){
         </div>
       </div>
       <div style="padding:12px 16px">
-        ${order.remarks?`<div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:16px;color:#92400E;font-weight:600">⚠️ ${order.remarks}</div>`:""}
-        ${order.staffReply?`<div style="background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:14px;color:#1E40AF;font-weight:600">💬 Sent: ${order.staffReply}</div>`:""}
+        ${order.remarks?`<div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:16px;color:#92400E;font-weight:600">⚠️ ${escHtml(order.remarks)}</div>`:""}
+        ${order.staffReply?`<div style="background:#EFF6FF;border:1px solid #93C5FD;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:14px;color:#1E40AF;font-weight:600">💬 Sent: ${escHtml(order.staffReply)}</div>`:""}
+        ${order.customerReply?`<div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:16px;color:#9A3412;font-weight:700">↩️ Customer: ${escHtml(order.customerReply)}${canCustomerReply(order)?"":` <span style="font-size:11px;font-weight:600;color:#C2410C">• waiting for you</span>`}</div>`:""}
         ${order.items.map((item,i)=>{
           const ad = addons(item);
           return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:${i<order.items.length-1?"1px solid #E5E0D8":"none"}">
@@ -2570,7 +2577,8 @@ function renderKitchen(){
         ${order.status!=="ready"&&order.status!=="collected"?`<button onclick="markReady('${order.id}',${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#16A34A;color:#fff;border-radius:9px">🔔 Call Customer</button>`:""}
         ${order.status==="ready"?`<button onclick="recallOrder('${order.id}',${order.queueNo})" style="flex:1;padding:11px;font-size:14px;font-weight:700;background:#2563EB;color:#fff;border-radius:9px">🔁 Re-call</button>`:""}
         ${order.status==="ready"?`<button onclick="confirmCollected('${order.id}')" style="flex:1;padding:11px;font-size:14px;font-weight:600;background:#78716C;color:#fff;border-radius:9px">✓ Collected</button>`:""}
-        <button onclick="openReply('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:${order.staffReply?"#EFF6FF":"#F5F3F0"};color:${order.staffReply?"#1E40AF":"#1C1917"};border:1px solid ${order.staffReply?"#93C5FD":"#E5E0D8"};border-radius:9px">💬 Reply</button>
+        ${(()=>{const waiting=order.customerReply&&!canCustomerReply(order);
+          return `<button onclick="openReply('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:${waiting?"#FFF7ED":order.staffReply?"#EFF6FF":"#F5F3F0"};color:${waiting?"#9A3412":order.staffReply?"#1E40AF":"#1C1917"};border:1px solid ${waiting?"#FB923C":order.staffReply?"#93C5FD":"#E5E0D8"};border-radius:9px">${waiting?"↩️ Reply • 1":"💬 Reply"}</button>`;})()}
         <button onclick="printTicket(orders.find(x=>x.id==='${order.id}'))" style="padding:11px 20px;font-size:22px;background:#F5F3F0;color:#1C1917;border:1px solid #E5E0D8;border-radius:9px">🖨️</button>
         <button onclick="printReceiptById('${order.id}')" style="padding:11px 14px;font-size:13px;font-weight:700;background:#EFF6FF;color:#1E40AF;border:1px solid #93C5FD;border-radius:9px">🧾 Receipt</button>
         ${order.status!=="cancelled"?`<button onclick="confirmCancelOrder('${order.id}')" style="padding:11px 16px;font-size:14px;font-weight:700;background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;border-radius:9px">✕ Cancel</button>`:""}
@@ -2607,6 +2615,68 @@ const REPLY_PRESETS = [
 
 let replyOrderId = null;
 
+// Customer -> stall. Capped, trimmed, and only reachable while the reply box
+// is on screen, which canCustomerReply() governs.
+function sendCustomerReply(id, text){
+  const msg = (text || "").trim().slice(0, 120);
+  if(!msg) return;
+  const btn  = document.getElementById("cust-reply-send");
+  const note = document.getElementById("cust-reply-note");
+  if(btn){ btn.disabled = true; btn.style.opacity = "0.6"; btn.textContent = "…"; }
+  let done = false;
+  // Offline, the write queues and the promise never settles. Say so rather
+  // than leaving the customer looking at a dead button.
+  const slow = setTimeout(function(){
+    if(!done && note) note.textContent = "Still sending — it will go through when the signal returns.";
+  }, 6000);
+  ordersRef.child(id).update({customerReply: msg, customerReplyAt: Date.now()})
+    .then(function(){ done = true; clearTimeout(slow); })
+    .catch(function(){
+      done = true; clearTimeout(slow);
+      if(btn){ btn.disabled = false; btn.style.opacity = "1"; btn.textContent = "Send"; }
+      if(note) note.textContent = "Could not send. Please come to the counter.";
+    });
+}
+
+// Staff alert for an incoming reply. A short double chirp on purpose —
+// playBeep() is ten loud beeps and belongs to a new order, not a message.
+function chirpTwice(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 220].forEach(function(d){
+      setTimeout(function(){
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.type = "sine"; osc.frequency.value = 880;
+        g.gain.setValueAtTime(0.5, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(); osc.stop(ctx.currentTime + 0.25);
+      }, d);
+    });
+    setTimeout(function(){ try{ ctx.close(); }catch(e){} }, 900);
+  }catch(e){}
+}
+
+let seenCustReplies = {};
+let custReplyPrimed = false;
+function checkNewCustomerReplies(){
+  let fresh = 0;
+  orders.forEach(function(o){
+    if(!o || !o.customerReplyAt) return;
+    if(seenCustReplies[o.id] !== o.customerReplyAt){
+      seenCustReplies[o.id] = o.customerReplyAt;
+      if(custReplyPrimed) fresh++;
+    }
+  });
+  // The first pass after sign-in only records what is already there, so staff
+  // are not greeted by a beep for every reply from earlier in the day.
+  custReplyPrimed = true;
+  if(fresh > 0){
+    chirpTwice();
+    toast("↩️ " + fresh + (fresh > 1 ? " customer replies" : " customer reply"), "#EA580C");
+  }
+}
+
 function openReply(orderId){
   const o = orders.find(x=>x.id===orderId);
   if(!o) return;
@@ -2617,6 +2687,11 @@ function openReply(orderId){
     rw.classList.remove("hidden");
     document.getElementById("reply-remarks-text").textContent = o.remarks;
   } else { rw.classList.add("hidden"); }
+  const cr = document.getElementById("reply-custreply");
+  if(o.customerReply){
+    cr.classList.remove("hidden");
+    document.getElementById("reply-custreply-text").textContent = o.customerReply;
+  } else { cr.classList.add("hidden"); }
   document.getElementById("reply-text").value = o.staffReply || "";
   document.getElementById("reply-presets").innerHTML = REPLY_PRESETS.map((t,i)=>
     `<button onclick="sendReply(REPLY_PRESETS[${i}])" style="display:block;width:100%;text-align:left;background:#F5F3F0;border:1px solid #E5E0D8;border-radius:10px;padding:13px 14px;font-size:14px;font-weight:600;color:#1C1917;margin-bottom:8px;line-height:1.4">${t}</button>`
@@ -2648,10 +2723,10 @@ function sendReply(text){
 function clearReply(){
   if(!replyOrderId) return;
   const id = replyOrderId;
-  ordersRef.child(id).update({staffReply: null, staffReplyAt: null})
+  ordersRef.child(id).update({staffReply: null, staffReplyAt: null, customerReply: null, customerReplyAt: null})
     .catch(e=>showError("Reply", e));
   const o = orders.find(x=>x.id===id);
-  if(o){ delete o.staffReply; delete o.staffReplyAt; }
+  if(o){ delete o.staffReply; delete o.staffReplyAt; delete o.customerReply; delete o.customerReplyAt; }
   closeReply();
   renderKitchen();
   toast("Message removed", "#78716C");
@@ -2686,16 +2761,55 @@ function renderCashStatus(o){
   }
 }
 
+// Anything a customer types is rendered inside the kitchen screen, which is
+// behind the staff password. Escaping it is what stops a remark or a reply
+// from running as markup in there.
+function escHtml(v){
+  return String(v == null ? "" : v).replace(/[&<>"']/g, function(m){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];
+  });
+}
+
+// One reply per message, and only ever in answer to one. The box exists only
+// while the stall's last message is newer than the customer's last reply, so
+// nothing unprompted can reach the kitchen.
+function canCustomerReply(o){
+  return !!(o && o.staffReplyAt && (!o.customerReplyAt || o.customerReplyAt < o.staffReplyAt));
+}
+
 // Customer side — show whatever the stall has sent
 let lastReplyShown = null;
+let lastReplySig = null;
 function renderStaffReply(o){
   const box = document.getElementById("staff-reply-box");
   if(!box) return;
-  if(!o || !o.staffReply){ box.classList.add("hidden"); box.innerHTML=""; return; }
+  if(!o || !o.staffReply){ box.classList.add("hidden"); box.innerHTML=""; lastReplySig = null; return; }
   box.classList.remove("hidden");
-  box.innerHTML = `
+  // Firebase fires this on every change to the order — status, cash, queue
+  // number. Rebuilding the box each time would wipe a half-typed reply, so it
+  // is rebuilt only when the conversation itself has moved on.
+  const sig = (o.staffReplyAt || 0) + "|" + (o.customerReplyAt || 0);
+  if(sig !== lastReplySig){
+    lastReplySig = sig;
+    box.innerHTML = `
     <div style="font-size:11px;color:#93C5FD;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">💬 Message from NIE Western Food</div>
-    <div style="font-size:16px;color:#fff;font-weight:600;line-height:1.5">${o.staffReply}</div>`;
+    <div style="font-size:16px;color:#fff;font-weight:600;line-height:1.5">${escHtml(o.staffReply)}</div>
+    ${canCustomerReply(o) ? `
+    <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap">
+      <button onclick="sendCustomerReply('${o.id}','Yes')" style="flex:1;min-width:70px;padding:12px 8px;background:#3B82F6;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:700">Yes</button>
+      <button onclick="sendCustomerReply('${o.id}','No')" style="flex:1;min-width:70px;padding:12px 8px;background:#475569;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:700">No</button>
+      <button onclick="sendCustomerReply('${o.id}','Thank you')" style="flex:1;min-width:96px;padding:12px 8px;background:#475569;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:700">Thank you</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <input id="cust-reply-text" type="text" maxlength="120" placeholder="Or type a short reply…" style="flex:1;min-width:0;padding:12px;border:1px solid #3B82F6;border-radius:10px;font-size:15px;background:#fff;color:#1C1917;outline:none;font-family:'DM Sans',sans-serif" onkeydown="if(event.key==='Enter')sendCustomerReply('${o.id}',this.value)">
+      <button id="cust-reply-send" onclick="sendCustomerReply('${o.id}',document.getElementById('cust-reply-text').value)" style="padding:12px 16px;background:#16A34A;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:700;flex-shrink:0">Send</button>
+    </div>
+    <div id="cust-reply-note" style="font-size:11px;color:#93C5FD;margin-top:6px">${T("For anything urgent, please come to the counter.")}</div>` : (o.customerReply ? `
+    <div style="margin-top:12px;background:rgba(255,255,255,0.12);border-left:3px solid #86EFAC;border-radius:8px;padding:9px 12px">
+      <div style="font-size:10px;color:#86EFAC;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px">✓ ${T("Your reply sent")}</div>
+      <div style="font-size:15px;color:#fff;font-weight:600">${escHtml(o.customerReply)}</div>
+    </div>` : "")}`;
+  }
   if(o.staffReplyAt && o.staffReplyAt !== lastReplyShown){
     lastReplyShown = o.staffReplyAt;
     try{ if(navigator.vibrate) navigator.vibrate([250,120,250]); }catch(e){}
