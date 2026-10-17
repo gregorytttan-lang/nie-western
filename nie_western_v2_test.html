@@ -346,17 +346,11 @@ input{font-family:'DM Sans',sans-serif;outline:none}
         <div id="pay-qr-wrap"><div id="dynamic-qr" style="width:180px;height:180px;display:flex;align-items:center;justify-content:center"></div></div>
         <div style="font-size:10px;color:#78716C;margin-top:10px;font-weight:500">Amount is pre-filled — just confirm & pay</div>
       </div>
-      <!-- Screenshot button -->
-      <button onclick="screenshotQR()" style="background:#C4572A;color:#fff;border-radius:12px;padding:14px 24px;font-size:15px;font-weight:700;width:100%;max-width:212px;margin-bottom:16px">📸 Save QR to Phone</button>
-      <!-- OCBC: saved image is rejected by the OCBC app, a screenshot of this screen works -->
-      <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:10px;padding:10px 14px;margin:0 0 16px;font-size:14px;line-height:1.45;color:#78350F;text-align:left">
-        <strong>Using OCBC?</strong> Don't use the saved image. Take a <strong>screenshot of this screen</strong> (amount + QR), then scan it from your gallery in the OCBC app.
-      </div>
       <!-- Steps -->
       <div style="display:flex;flex-direction:column;gap:10px;text-align:left">
         <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.07);border-radius:10px;padding:10px 14px">
           <span style="background:#C4572A;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span>
-          <span style="font-size:15px;color:rgba(255,255,255,0.85);line-height:1.4">Tap <strong style="color:#fff">Save QR to Phone</strong> above to save the QR</span>
+          <span style="font-size:15px;color:rgba(255,255,255,0.85);line-height:1.4">Take a <strong style="color:#fff">screenshot of this screen</strong> (amount + QR)</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.07);border-radius:10px;padding:10px 14px">
           <span style="background:#C4572A;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
@@ -603,6 +597,9 @@ const CN = {
     "Save QR to Phone":"保存二维码到手机",
     "Tap":"点击",
     "above to save the QR":"保存二维码",
+    "Take a":"请",
+    "screenshot of this screen":"截屏本页面",
+    "(amount + QR)":"（须包含金额和二维码）",
     "Open bank app → PayNow → Scan from gallery → Confirm payment":"打开银行应用 → PayNow → 从相册扫码 → 确认付款",
     "I Have Paid":"我已付款",
     "below to get your queue number":"以获取排队号",
