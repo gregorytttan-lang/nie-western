@@ -4715,7 +4715,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-17-live1";
+const BUILD = "2026-10-17-live2";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
@@ -4746,6 +4746,14 @@ const BUILD = "2026-10-17-live1";
       if(sessionStorage.getItem(KEY) === latest) return;   // tried once already: never loop
       if(!idle()) return;                                  // try again at the next check
       sessionStorage.setItem(KEY, latest);
+      // Kitchen/admin tablets: remember which screen was open, so the update
+      // puts them straight back instead of dropping them on the customer menu.
+      try{
+        ["kitchen","admin"].forEach(v=>{
+          const el = document.getElementById("view-"+v);
+          if(el && !el.classList.contains("hidden")) sessionStorage.setItem("nie_resume_view", v);
+        });
+      }catch(e){}
       const u = new URL(location.href);
       u.searchParams.set("v", latest);                     // new address = skips the cached copy
       location.replace(u.toString());
@@ -4767,6 +4775,14 @@ try{
   firebase.auth().onAuthStateChanged(user=>{
     _authed = !!user;
     if(user) startOrdersLive();
+    // Came back from an automatic update: reopen the staff screen that was showing
+    try{
+      const rv = sessionStorage.getItem("nie_resume_view");
+      if(rv){
+        sessionStorage.removeItem("nie_resume_view");
+        if(user) showView(rv);
+      }
+    }catch(e){}
   });
 }catch(e){
   console.warn("Firebase Auth unavailable; staff sign-in will not work.", e);
