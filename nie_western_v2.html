@@ -1948,11 +1948,13 @@ async function proceedToPaymentInner(mode){
   }
 
   // Refresh the order list so the counter repair has accurate data
-  try{
-    const snap = await ordersRef.once("value");
-    const d = snap.val();
-    if(d) orders = Object.values(d);
-  }catch(e){}
+  if(firebase.auth().currentUser){
+    try{
+      const snap = await ordersRef.once("value");
+      const d = snap.val();
+      if(d) orders = Object.values(d);
+    }catch(e){}
+  }
 
   const remarks = document.getElementById("order-remarks").value.trim();
   pendingOrder = {id:uid(), items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
@@ -2325,6 +2327,7 @@ function doFindOrder(){
   // Customer devices no longer stream the orders list, so fetch a fresh copy
   const err0 = document.getElementById("find-error");
   if(err0) err0.textContent = "Searching...";
+  if(!firebase.auth().currentUser){ doFindOrder2(); return; }
   ordersRef.once("value")
     .then(snap=>{ const d = snap.val(); orders = d ? Object.values(d) : []; doFindOrder2(); })
     .catch(()=>doFindOrder2());
@@ -4804,7 +4807,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-17-live5";
+const BUILD = "2026-10-17-live6";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
@@ -5261,7 +5264,8 @@ function watchLateDelivery(orderId){
 
 // Customer devices: one read at startup so Find My Order and the queue-number
 // safety net still work, then nothing further until they place an order.
-ordersRef.once("value").then(handleOrdersSnapshot).catch(()=>{});
+// (skipped for customers: the rules only let staff read the full list)
+if(firebase.auth().currentUser){ ordersRef.once("value").then(handleOrdersSnapshot).catch(()=>{}); }
 
 // Staff devices: full live feed, switched on when someone unlocks Kitchen or Admin.
 function startOrdersLive(){
