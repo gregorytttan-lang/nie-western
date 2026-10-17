@@ -303,12 +303,15 @@ input{font-family:'DM Sans',sans-serif;outline:none}
         </button>
       </div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:16px;border-top:2px solid #E5E0D8">
-      <div>
+    <div style="margin-top:16px;padding-top:16px;border-top:2px solid #E5E0D8">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
         <div style="font-size:12px;color:#78716C">Total</div>
         <div class="serif" id="cart-total-display" style="font-size:24px;font-weight:700;color:#C4572A"></div>
       </div>
-      <button onclick="proceedToPayment()" id="pay-now-btn" style="background:#D4CFC8;color:#fff;border-radius:14px;padding:16px 28px;font-size:15px;font-weight:600;cursor:not-allowed;opacity:0.6" disabled>Pay Now →</button>
+      <div style="display:flex;gap:10px">
+        <button onclick="proceedToCash()" id="pay-cash-btn" style="flex:1;background:#D4CFC8;color:#fff;border-radius:14px;padding:16px 10px;font-size:15px;font-weight:600;cursor:not-allowed;opacity:0.6" disabled>💵 Cash at Counter</button>
+        <button onclick="proceedToPayment()" id="pay-now-btn" style="flex:1;background:#D4CFC8;color:#fff;border-radius:14px;padding:16px 10px;font-size:15px;font-weight:600;cursor:not-allowed;opacity:0.6" disabled>Pay Now →</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1491,6 +1494,7 @@ function setDining(opt){
   const btn = document.getElementById("pay-now-btn");
   btn.disabled = false;
   btn.style.background="#C4572A"; btn.style.cursor="pointer"; btn.style.opacity="1";
+  setCashBtn(true);
   // Update total display
   document.getElementById("cart-total-display").textContent = fmtS(cartTotal());
 }
@@ -1748,10 +1752,12 @@ function openCart(){
       dw.style.display="none";
       diningOption="dinein";
       if(payBtn){ payBtn.disabled=false; payBtn.style.background="#C4572A"; payBtn.style.cursor="pointer"; payBtn.style.opacity="1"; }
+      setCashBtn(true);
     } else {
       dw.style.display="";
       // Reset pay button for normal orders - requires dining selection
       if(payBtn){ payBtn.disabled=true; payBtn.style.background="#D4CFC8"; payBtn.style.cursor="not-allowed"; payBtn.style.opacity="0.6"; }
+      setCashBtn(false);
     }
   }
   const m = document.getElementById("cart-modal");
@@ -1824,6 +1830,42 @@ function renderCartModal(){
 // ── PAYMENT ──────────────────────────────────────────────────────────────────
 let payInFlight = false;
 
+function setCashBtn(on, label){
+  const b = document.getElementById("pay-cash-btn");
+  if(!b) return;
+  b.disabled = !on;
+  b.textContent = label || "\u{1F4B5} Cash at Counter";
+  b.style.background = on ? "#2563EB" : "#D4CFC8";
+  b.style.cursor = on ? "pointer" : "not-allowed";
+  b.style.opacity = on ? "1" : "0.6";
+}
+
+// Cash at the counter straight from the order screen - no need to open the
+// PayNow screen first just to find the cash button.
+async function proceedToCash(){
+  if(!cart.length) return;
+  if(payInFlight) return;
+  if(!diningOption && !isSnacksOnly()){ alert("Please select Dine In or Take Away first."); return; }
+  const ok = confirm("\u{1F4B5} PAY CASH AT THE COUNTER\n\n"
+    + "Your order will be sent to the kitchen now.\n"
+    + "Please pay " + fmtS(cartTotal()) + " in cash at the counter.\n\n"
+    + "Press OK to place your order.");
+  if(!ok) return;
+  payInFlight = true;
+  const payBtn = document.getElementById("pay-now-btn");
+  if(payBtn){ payBtn.disabled = true; payBtn.style.opacity = "0.6"; }
+  setCashBtn(false, "Please wait...");
+  try{
+    await proceedToPaymentInner("cash");
+  } catch(e){
+    showError("Could not place cash order", e);
+  } finally {
+    payInFlight = false;
+    if(payBtn){ payBtn.disabled = false; payBtn.textContent = "Pay Now \u2192"; payBtn.style.opacity = "1"; }
+    setCashBtn(true);
+  }
+}
+
 async function proceedToPayment(){
   if(!cart.length) return;
   // This now claims a queue number and writes a draft, which takes a moment on
@@ -1833,6 +1875,7 @@ async function proceedToPayment(){
   payInFlight = true;
   const payBtn = document.getElementById("pay-now-btn");
   if(payBtn){ payBtn.disabled = true; payBtn.textContent = "Please wait..."; payBtn.style.opacity = "0.6"; }
+  setCashBtn(false);
   try{
     await proceedToPaymentInner();
   } catch(e){
@@ -1840,6 +1883,7 @@ async function proceedToPayment(){
   } finally {
     payInFlight = false;
     if(payBtn){ payBtn.disabled = false; payBtn.textContent = "Pay Now \u2192"; payBtn.style.opacity = "1"; }
+    setCashBtn(true);
   }
 }
 
@@ -1861,7 +1905,7 @@ function recentIdenticalOrder(){
     && sigOf(o.items||[]) === sig);
 }
 
-async function proceedToPaymentInner(){
+async function proceedToPaymentInner(mode){
   if(!cart.length) return;
 
   const twin = recentIdenticalOrder();
@@ -1913,6 +1957,17 @@ async function proceedToPaymentInner(){
   const remarks = document.getElementById("order-remarks").value.trim();
   pendingOrder = {id:uid(), items:[...cart.map(i=>({...i}))], total:cartTotal(), dining:diningOption, takeawayCharge:takeawayCharge(), remarks, createdAt:Date.now()};
   closeCart();
+  if(mode === "cash"){
+    // Cash at the counter: skip the PayNow screen and place the order directly
+    await confirmPayment("cash");
+    if(cart.length){
+      // It did not go through (no signal etc.): put everything back as it was
+      if(reservedSpecialQty > 0){ releaseSpecial(reservedSpecialQty); reservedSpecialQty = 0; }
+      pendingOrder = null;
+      toast("Order not placed - please try again", "#DC2626");
+    }
+    return;
+  }
   // Render pay modal items
   const addons = c => Object.values(c.choices||{}).flatMap(x=>Array.isArray(x)?x:[x]).filter(x=>{const n=x.name||x;return n!=="No thanks"&&n!=="None";});
   document.getElementById("pay-items").innerHTML = pendingOrder.items.map((item,i)=>{
@@ -4749,7 +4804,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-17-live4";
+const BUILD = "2026-10-17-live5";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
