@@ -1339,9 +1339,10 @@ function handleAdd(id){
 
     if(filteredItem.modifiers.length>0){
       modItem = filteredItem;
-      modChoices = existing.length
-        ? prefillChoices(filteredItem, existing[existing.length-1].choices)
-        : {};
+      // Always start with nothing ticked. Carrying the last order's sides over
+      // meant a customer wanting spaghetti on the second chicken chop still had
+      // butter rice ticked, and received both unless they knew to untick it.
+      modChoices = {};
       openModModal(filteredItem);
     } else {
       addToCart(item, {});
@@ -4748,7 +4749,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-17-live3";
+const BUILD = "2026-10-17-live4";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
