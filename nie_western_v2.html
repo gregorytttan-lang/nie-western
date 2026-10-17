@@ -346,13 +346,11 @@ input{font-family:'DM Sans',sans-serif;outline:none}
         <div id="pay-qr-wrap"><div id="dynamic-qr" style="width:180px;height:180px;display:flex;align-items:center;justify-content:center"></div></div>
         <div style="font-size:10px;color:#78716C;margin-top:10px;font-weight:500">Amount is pre-filled — just confirm & pay</div>
       </div>
-      <!-- Screenshot button -->
-      <button onclick="screenshotQR()" style="background:#C4572A;color:#fff;border-radius:12px;padding:14px 24px;font-size:15px;font-weight:700;width:100%;max-width:212px;margin-bottom:16px">📸 Save QR to Phone</button>
       <!-- Steps -->
       <div style="display:flex;flex-direction:column;gap:10px;text-align:left">
         <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.07);border-radius:10px;padding:10px 14px">
           <span style="background:#C4572A;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">1</span>
-          <span style="font-size:15px;color:rgba(255,255,255,0.85);line-height:1.4">Tap <strong style="color:#fff">Save QR to Phone</strong> above to save the QR</span>
+          <span style="font-size:15px;color:rgba(255,255,255,0.85);line-height:1.4">Take a <strong style="color:#fff">screenshot of this screen</strong> (amount + QR)</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.07);border-radius:10px;padding:10px 14px">
           <span style="background:#C4572A;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
@@ -599,6 +597,9 @@ const CN = {
     "Save QR to Phone":"保存二维码到手机",
     "Tap":"点击",
     "above to save the QR":"保存二维码",
+    "Take a":"请",
+    "screenshot of this screen":"截屏本页面",
+    "(amount + QR)":"（须包含金额和二维码）",
     "Open bank app → PayNow → Scan from gallery → Confirm payment":"打开银行应用 → PayNow → 从相册扫码 → 确认付款",
     "I Have Paid":"我已付款",
     "below to get your queue number":"以获取排队号",
@@ -657,16 +658,35 @@ const fmtQ  = n => "#" + String(n).padStart(3,"0");
 const fmtS  = n => "$" + Number(n).toFixed(2);
 
 function screenshotQR(){
-  const canvas = document.querySelector('#dynamic-qr canvas');
-  if(!canvas){ toast("QR not ready, please try again","#DC2626"); return; }
-  // Save directly to downloads — shows in gallery on Android
-  const a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png');
-  a.download = 'PayNow-QR.png';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  toast("✅ QR saved! Check your Downloads or Gallery 📂", "#16A34A");
+  // Saves a complete, scannable picture: white background, amount on top, and a
+  // large QR with a clear white border. The bare 180px QR used before had no
+  // border (quiet zone), which OCBC's gallery scanner rejects as "not valid".
+  try{
+    if(!pendingOrder){ toast("QR not ready, please try again","#DC2626"); return; }
+    // Re-render the QR big so the saved picture is sharp
+    const tmp = document.createElement("div");
+    new QRCode(tmp, {text: buildPayNowQR(pendingOrder.total), width: 640, height: 640, colorDark:"#000000", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M});
+    const src = tmp.querySelector("canvas");
+    if(!src){ toast("QR not ready, please try again","#DC2626"); return; }
+    const W = 800, QR = 640, top = 170, pad = (W-QR)/2, H = top + QR + 90;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#ffffff"; g.fillRect(0,0,W,H);
+    g.fillStyle = "#C4572A"; g.textAlign = "center";
+    g.font = "bold 34px sans-serif"; g.fillText("PayNow - NIE Western Food", W/2, 56);
+    g.fillStyle = "#1C1917"; g.font = "bold 76px sans-serif"; g.fillText(fmtS(pendingOrder.total), W/2, 134);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(src, pad, top, QR, QR);
+    g.fillStyle = "#78716C"; g.font = "26px sans-serif";
+    g.fillText("Scan from gallery in your bank app", W/2, top + QR + 56);
+    const a = document.createElement("a");
+    a.href = c.toDataURL("image/png");
+    a.download = "PayNow-QR.png";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast("✅ QR saved! Check your Downloads or Gallery 📂", "#16A34A");
+  }catch(e){
+    toast("Could not save QR - please take a screenshot instead","#DC2626");
+  }
 }
 function toast(msg, color){
   color = color || "#16A34A";
@@ -4695,7 +4715,46 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-09-14-v2e";
+const BUILD = "2026-10-17-live1";
+
+// ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
+// GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
+// often keep it longer, so a new version was never picked up without clearing
+// the cache by hand. This asks the server (never from cache) which build is
+// current, and reloads to the new one when it differs from the one running.
+// It only reloads when nobody is mid-order, so it can never wipe a cart or an
+// open payment screen. To publish an update: change BUILD above AND the number
+// in version.json to the same new value.
+(function(){
+  const KEY = "nie_autoreload_for";
+  function idle(){
+    try{
+      if(cart && cart.length) return false;
+      if(pendingOrder) return false;
+      if(typeof payInFlight !== "undefined" && payInFlight) return false;
+      const ae = document.activeElement;
+      if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;
+      return true;
+    }catch(e){ return false; }
+  }
+  async function check(){
+    try{
+      const r = await fetch("version.json?t=" + Date.now(), {cache:"no-store"});
+      if(!r.ok) return;
+      const latest = String((await r.json()).build || "");
+      if(!latest || latest === BUILD) return;
+      if(sessionStorage.getItem(KEY) === latest) return;   // tried once already: never loop
+      if(!idle()) return;                                  // try again at the next check
+      sessionStorage.setItem(KEY, latest);
+      const u = new URL(location.href);
+      u.searchParams.set("v", latest);                     // new address = skips the cached copy
+      location.replace(u.toString());
+    }catch(e){}
+  }
+  setTimeout(check, 3000);
+  setInterval(check, 3*60*1000);
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) check(); });
+})();
 try{
   const _bs = document.getElementById("build-stamp");
   if(_bs) _bs.textContent = "v" + BUILD;
