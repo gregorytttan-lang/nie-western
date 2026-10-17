@@ -647,16 +647,8 @@ function Tcat(catName){
 const PAYNOW_UEN = "+6581612943";
 function tlv(tag,val){const v=String(val);return tag+v.length.toString().padStart(2,"0")+v;}
 function crc16(str){let c=0xFFFF;for(let i=0;i<str.length;i++){c^=str.charCodeAt(i)<<8;for(let j=0;j<8;j++){c=(c&0x8000)?((c<<1)^0x1021):(c<<1);c&=0xFFFF;}}return c.toString(16).toUpperCase().padStart(4,"0");}
-// TEST: PayNow expiry date (tag 04, yyyyMMdd). Set to tomorrow in Singapore time
-// so orders placed close to midnight are still valid.
-function paynowExpiry(){
-  const d = new Date(Date.now() + 24*60*60*1000);
-  const parts = new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Singapore",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(d);
-  const g = t => parts.find(x=>x.type===t).value;
-  return g("year")+g("month")+g("day");
-}
 function buildPayNowQR(amount){
-  const mid=tlv("00","SG.PAYNOW")+tlv("01","0")+tlv("02",PAYNOW_UEN)+tlv("03","0")+tlv("04",paynowExpiry());
+  const mid=tlv("00","SG.PAYNOW")+tlv("01","0")+tlv("02",PAYNOW_UEN)+tlv("03","0");
   const body=tlv("00","01")+tlv("01","12")+tlv("26",mid)+tlv("52","0000")+tlv("53","702")+tlv("54",amount.toFixed(2))+tlv("58","SG")+tlv("59","NIE WESTERN FOOD")+tlv("60","Singapore")+"6304";
   return body+crc16(body);
 }
@@ -665,16 +657,35 @@ const fmtQ  = n => "#" + String(n).padStart(3,"0");
 const fmtS  = n => "$" + Number(n).toFixed(2);
 
 function screenshotQR(){
-  const canvas = document.querySelector('#dynamic-qr canvas');
-  if(!canvas){ toast("QR not ready, please try again","#DC2626"); return; }
-  // Save directly to downloads — shows in gallery on Android
-  const a = document.createElement('a');
-  a.href = canvas.toDataURL('image/png');
-  a.download = 'PayNow-QR.png';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  toast("✅ QR saved! Check your Downloads or Gallery 📂", "#16A34A");
+  // Saves a complete, scannable picture: white background, amount on top, and a
+  // large QR with a clear white border. The bare 180px QR used before had no
+  // border (quiet zone), which OCBC's gallery scanner rejects as "not valid".
+  try{
+    if(!pendingOrder){ toast("QR not ready, please try again","#DC2626"); return; }
+    // Re-render the QR big so the saved picture is sharp
+    const tmp = document.createElement("div");
+    new QRCode(tmp, {text: buildPayNowQR(pendingOrder.total), width: 640, height: 640, colorDark:"#000000", colorLight:"#ffffff", correctLevel: QRCode.CorrectLevel.M});
+    const src = tmp.querySelector("canvas");
+    if(!src){ toast("QR not ready, please try again","#DC2626"); return; }
+    const W = 800, QR = 640, top = 170, pad = (W-QR)/2, H = top + QR + 90;
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#ffffff"; g.fillRect(0,0,W,H);
+    g.fillStyle = "#C4572A"; g.textAlign = "center";
+    g.font = "bold 34px sans-serif"; g.fillText("PayNow - NIE Western Food", W/2, 56);
+    g.fillStyle = "#1C1917"; g.font = "bold 76px sans-serif"; g.fillText(fmtS(pendingOrder.total), W/2, 134);
+    g.imageSmoothingEnabled = false;
+    g.drawImage(src, pad, top, QR, QR);
+    g.fillStyle = "#78716C"; g.font = "26px sans-serif";
+    g.fillText("Scan from gallery in your bank app", W/2, top + QR + 56);
+    const a = document.createElement("a");
+    a.href = c.toDataURL("image/png");
+    a.download = "PayNow-QR.png";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast("✅ QR saved! Check your Downloads or Gallery 📂", "#16A34A");
+  }catch(e){
+    toast("Could not save QR - please take a screenshot instead","#DC2626");
+  }
 }
 function toast(msg, color){
   color = color || "#16A34A";
