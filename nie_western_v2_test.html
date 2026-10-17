@@ -4715,7 +4715,46 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-09-14-v2e";
+const BUILD = "2026-10-17-t1";
+
+// ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
+// GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
+// often keep it longer, so a new version was never picked up without clearing
+// the cache by hand. This asks the server (never from cache) which build is
+// current, and reloads to the new one when it differs from the one running.
+// It only reloads when nobody is mid-order, so it can never wipe a cart or an
+// open payment screen. To publish an update: change BUILD above AND the number
+// in version.json to the same new value.
+(function(){
+  const KEY = "nie_autoreload_for";
+  function idle(){
+    try{
+      if(cart && cart.length) return false;
+      if(pendingOrder) return false;
+      if(typeof payInFlight !== "undefined" && payInFlight) return false;
+      const ae = document.activeElement;
+      if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;
+      return true;
+    }catch(e){ return false; }
+  }
+  async function check(){
+    try{
+      const r = await fetch("version.json?t=" + Date.now(), {cache:"no-store"});
+      if(!r.ok) return;
+      const latest = String((await r.json()).build || "");
+      if(!latest || latest === BUILD) return;
+      if(sessionStorage.getItem(KEY) === latest) return;   // tried once already: never loop
+      if(!idle()) return;                                  // try again at the next check
+      sessionStorage.setItem(KEY, latest);
+      const u = new URL(location.href);
+      u.searchParams.set("v", latest);                     // new address = skips the cached copy
+      location.replace(u.toString());
+    }catch(e){}
+  }
+  setTimeout(check, 3000);
+  setInterval(check, 3*60*1000);
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) check(); });
+})();
 try{
   const _bs = document.getElementById("build-stamp");
   if(_bs) _bs.textContent = "v" + BUILD;
