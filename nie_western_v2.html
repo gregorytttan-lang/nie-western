@@ -1770,9 +1770,36 @@ function clearCartAndClose(){
   renderMenu();
 }
 
+// The + and - in the cart act on THAT exact line. They used to call handleAdd(),
+// which for an item with options opens the options popup - and the popup opens
+// BEHIND the cart screen, so the customer tapped + and nothing visibly happened.
+function cartLineChange(idx, delta){
+  const line = cart[idx];
+  if(!line) return;
+  if(delta > 0){
+    // Same limits as handleAdd: showcase stock and today's special
+    const left = stockLeft(line.id);
+    if(left !== null){
+      const inCart = cart.filter(x=>x.id===line.id).reduce((s,x)=>s+x.qty,0);
+      if(inCart >= left){ toast(left > 0 ? ("Only " + left + " left in the showcase") : "Sold out", "#C4572A"); return; }
+    }
+    if(line.id === SPECIAL_ID){
+      const sl = specialLeft();
+      if(specialInCart() >= sl){ toast(sl > 0 ? ("Only " + sl + " left today") : "Sold out for today", "#C4572A"); return; }
+    }
+    line.qty++;
+  } else {
+    line.qty--;
+    if(line.qty <= 0) cart.splice(idx, 1);
+  }
+  renderMenu();
+  if(!cart.length){ closeCart(); updateCartFab(); return; }
+  renderCartModal(); updateCartFab(); updateTakeawayFeeLabel();
+}
+
 function renderCartModal(){
   const addons = c => Object.values(c.choices||{}).flatMap(x=>Array.isArray(x)?x:[x]).filter(x=>{const n=x.name||x;return n!=="No thanks"&&n!=="None";});
-  document.getElementById("cart-items").innerHTML = cart.map(item=>{
+  document.getElementById("cart-items").innerHTML = cart.map((item,idx)=>{
     const e = Object.values(item.choices||{}).reduce((s,c)=>s+choicePrice(c),0);
     const unit = item.price + e;
     const ad = addons(item);
@@ -1783,9 +1810,9 @@ function renderCartModal(){
         <div style="font-size:12px;color:#78716C">${fmtS(unit)} ${T("each")}</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="removeFromCart('${item.cartKey}');renderCartModal();updateCartFab()" style="width:30px;height:30px;border-radius:50%;background:#F5F3F0;border:1px solid #E5E0D8;color:#1C1917;font-size:16px;display:flex;align-items:center;justify-content:center">−</button>
+        <button onclick="cartLineChange(${idx},-1)" style="width:30px;height:30px;border-radius:50%;background:#F5F3F0;border:1px solid #E5E0D8;color:#1C1917;font-size:16px;display:flex;align-items:center;justify-content:center">−</button>
         <span style="font-weight:700;font-size:15px;min-width:20px;text-align:center">${item.qty}</span>
-        <button onclick="handleAdd('${item.id}');renderCartModal()" style="width:30px;height:30px;border-radius:50%;background:#C4572A;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center">+</button>
+        <button onclick="cartLineChange(${idx},1)" style="width:30px;height:30px;border-radius:50%;background:#C4572A;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center">+</button>
         <span style="font-family:'Playfair Display',serif;font-weight:700;color:#C4572A;font-size:14px;min-width:52px;text-align:right">${fmtS(unit*item.qty)}</span>
       </div>
     </div>`;
@@ -1819,12 +1846,18 @@ async function proceedToPayment(){
 // always the same customer trying again because the first attempt looked
 // like it failed. Catch it before it becomes a second meal to cook.
 function recentIdenticalOrder(){
-  const sig = cart.map(i=>i.qty+"x"+i.id).sort().join("|");
+  // Choices (sauce, sides) are part of the order: the same dish with a different
+  // sauce is a different order, not a repeat. Only this device's own recent
+  // orders count - other customers' orders must never trigger the warning.
+  const picks = c => Object.values(c||{}).flatMap(x=>Array.isArray(x)?x:[x]).map(x=>x.name||x).sort().join("+");
+  const sigOf = list => list.map(i=>i.qty+"x"+i.id+":"+picks(i.choices)).sort().join("|");
+  const sig = sigOf(cart);
   const total = cartTotal().toFixed(2);
   const cutoff = Date.now() - 5*60*1000;
-  return orders.find(o=>o && o.createdAt > cutoff && o.status !== "cancelled"
+  const own = new Set(ls(ACTIVE_ORDERS_KEY, []).map(x=>x.id));
+  return orders.find(o=>o && own.has(o.id) && o.createdAt > cutoff && o.status !== "cancelled"
     && Number(o.total).toFixed(2) === total
-    && (o.items||[]).map(i=>i.qty+"x"+i.id).sort().join("|") === sig);
+    && sigOf(o.items||[]) === sig);
 }
 
 async function proceedToPaymentInner(){
@@ -4715,7 +4748,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-17-live2";
+const BUILD = "2026-10-17-live3";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
