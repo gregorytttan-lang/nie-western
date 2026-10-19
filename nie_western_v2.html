@@ -4807,7 +4807,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-17-live6";
+const BUILD = "2026-10-19-live7";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
@@ -5271,7 +5271,14 @@ if(firebase.auth().currentUser){ ordersRef.once("value").then(handleOrdersSnapsh
 function startOrdersLive(){
   if(ordersLive) return;
   ordersLive = true;
-  ordersRef.on("value", handleOrdersSnapshot);
+  // If Firebase cancels the feed (sign-in not ready or expired), it never
+  // restarts by itself - the kitchen would sit empty. Restart it.
+  ordersRef.on("value", handleOrdersSnapshot, err=>{
+    console.warn("Orders feed cancelled, restarting", err);
+    try{ ordersRef.off("value", handleOrdersSnapshot); }catch(e){}
+    ordersLive = false;
+    setTimeout(()=>{ try{ if(firebase.auth().currentUser) startOrdersLive(); }catch(e){} }, 3000);
+  });
 }
 
 // ── QUEUE DISPLAY (?display=1) ───────────────────────────────────────────────
