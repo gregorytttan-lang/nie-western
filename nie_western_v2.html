@@ -37,6 +37,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
 .serif{font-family:'Playfair Display',serif}
 .hidden{display:none!important}
 .overlay{position:fixed;inset:0;z-index:500;overflow-y:auto}
+#queue-modal,#recovery-modal{z-index:9500}  /* a customer's queue number must stay visible even when the stall is closed */
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,0.4)}70%{box-shadow:0 0 0 10px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
 </style>
 </head>
@@ -95,6 +96,7 @@ input{font-family:'DM Sans',sans-serif;outline:none}
       <div style="font-size:13px;color:#92400E;font-weight:600;margin-bottom:8px">🕐 Next Opening</div>
       <div id="reopen-msg" style="font-size:15px;color:#1C1917;font-weight:600;line-height:1.6"></div>
     </div>
+    <button id="closed-my-orders" onclick="openRecoveryList()" style="display:none;margin-top:20px;background:#C4572A;color:#fff;border:none;border-radius:14px;padding:16px 28px;font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(196,87,42,0.35)"></button>
     <div style="margin-top:28px;font-size:13px;color:#78716C">Thank you for visiting! See you soon 🙏</div>
     <div style="margin-top:28px;">
       <button onclick="openAdminFromClosed()" style="background:#1C1917;color:#fff;border:none;border-radius:12px;padding:12px 28px;font-size:14px;font-weight:700;cursor:pointer;">⚙️ Staff Admin</button>
@@ -116,6 +118,12 @@ input{font-family:'DM Sans',sans-serif;outline:none}
     </div>
     <div id="special-card" style="display:none;padding:0 12px 12px"></div>
     <div id="cat-tabs" style="display:flex;overflow-x:auto;scrollbar-width:none;padding:0 12px"></div>
+  </div>
+  <!-- Busy / paused banner -->
+  <div id="pause-banner" style="display:none;margin:8px 12px;background:#FEF2F2;border:2px solid #DC2626;border-radius:14px;padding:14px 16px">
+    <div style="font-size:15px;font-weight:800;color:#991B1B">⏸️ Very busy right now - not taking new orders</div>
+    <div id="pause-wait" style="font-size:13px;color:#7F1D1D;margin-top:4px;font-weight:600"></div>
+    <div style="font-size:12px;color:#7F1D1D;margin-top:4px">If you have already ordered, your queue number and food are not affected.</div>
   </div>
   <!-- Recovery Banner -->
   <div id="recovery-banner" style="display:none;margin:8px 12px;background:#FEF3C7;border:2px solid #F59E0B;border-radius:14px;padding:12px 16px;cursor:pointer;" onclick="openRecoveryList()">
@@ -1261,6 +1269,7 @@ function cartHasMain(){
 }
 
 function handleAdd(id){
+  if(isPausedForCustomer()){ alert(pausedMessage()); return; }
   const item = getItem(id);
   if(!item) return;
 
@@ -1844,6 +1853,7 @@ function setCashBtn(on, label){
 // PayNow screen first just to find the cash button.
 async function proceedToCash(){
   if(!cart.length) return;
+  if(isPausedForCustomer()){ alert(pausedMessage()); return; }
   if(payInFlight) return;
   if(!diningOption && !isSnacksOnly()){ alert("Please select Dine In or Take Away first."); return; }
   const ok = confirm("\u{1F4B5} PAY CASH AT THE COUNTER\n\n"
@@ -1868,6 +1878,7 @@ async function proceedToCash(){
 
 async function proceedToPayment(){
   if(!cart.length) return;
+  if(isPausedForCustomer()){ alert(pausedMessage()); return; }
   // This now claims a queue number and writes a draft, which takes a moment on
   // a slow connection. Without a guard a second tap claimed a SECOND number
   // and saved a SECOND order - one customer, two queue numbers.
@@ -2226,12 +2237,21 @@ function removeActiveOrder(orderId){
   updateRecoveryBanner();
 }
 
+function syncClosedOrdersBtn(list){
+  const b = document.getElementById("closed-my-orders");
+  if(!b) return;
+  if(!list || !list.length){ b.style.display = "none"; return; }
+  b.style.display = "inline-block";
+  b.textContent = "📋 My order: " + list.map(o=>o.queueNo ? "Q#"+String(o.queueNo).padStart(2,"0") : "waiting for number").join(", ") + " - tap to view";
+}
+
 function updateRecoveryBanner(){
   // Clean up old orders (older than 3 hours)
   const cutoff = Date.now() - 3*60*60*1000;
   let orders = ls(ACTIVE_ORDERS_KEY, []).filter(o=>o.createdAt > cutoff);
   lss(ACTIVE_ORDERS_KEY, orders);
 
+  syncClosedOrdersBtn(orders);
   const banner = document.getElementById("recovery-banner");
   const bannerText = document.getElementById("recovery-banner-text");
   if(!banner || !bannerText) return;
@@ -3726,6 +3746,39 @@ function openAdminFromClosed(){
 // screen back up after another device had opened the stall.
 let stallState = null;        // null = not heard from Firebase yet
 
+// Busy mode: menu stays visible, but customers cannot start a new order.
+// Orders already placed are untouched. Staff devices are never blocked.
+function isPausedForCustomer(){
+  return !!(stallState && stallState.open && stallState.paused && !_authed);
+}
+function pausedMessage(){
+  return "\u23f8\ufe0f We are very busy and not taking new orders right now."
+    + (stallState && stallState.wait ? "\n\nEstimated wait: " + stallState.wait : "")
+    + "\n\nPlease try again later. Orders already placed are not affected.";
+}
+function renderPause(){
+  const el = document.getElementById("pause-banner");
+  if(!el) return;
+  const on = !!(stallState && stallState.open && stallState.paused);
+  el.style.display = on ? "block" : "none";
+  const w = document.getElementById("pause-wait");
+  if(w) w.textContent = (on && stallState.wait) ? "Estimated wait: " + stallState.wait : "";
+}
+function togglePause(){
+  const on = !!(stallState && stallState.paused);
+  if(on){
+    db.ref("stall_status").update({paused:false, wait:"", at:Date.now()})
+      .then(()=>toast("\u25b6\ufe0f Taking new orders again", "#16A34A"))
+      .catch(e=>showError("Could not resume", e));
+  } else {
+    const w = prompt("Pause new orders.\nEstimated wait to show customers (e.g. 45 min). Leave blank for none:", "45 min");
+    if(w===null) return;
+    db.ref("stall_status").update({paused:true, wait:w.trim(), at:Date.now()})
+      .then(()=>toast("\u23f8\ufe0f New orders PAUSED on all customer phones", "#DC2626"))
+      .catch(e=>showError("Could not pause", e));
+  }
+}
+
 function renderStallStatus(){
   const isOpen = stallState ? !!stallState.open : ls("stall_open_nie", true);
   const reopenDate = stallState ? (stallState.reopen || "") : ls("stall_reopen_nie", "");
@@ -3738,7 +3791,19 @@ function renderStallStatus(){
       <div style="font-size:13px;font-weight:700;color:${isOpen?"#16A34A":"#DC2626"}">${isOpen?"🟢 Stall is OPEN":"🔴 Stall is CLOSED"}</div>
       <div style="font-size:11px;color:#78716C;margin-top:2px">${isOpen?"Customers can order now":"Customers will see closed message"}</div>
     </div>
-    <button onclick="toggleStall()" style="background:${isOpen?"#DC2626":"#16A34A"};color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;white-space:nowrap">${isOpen?"🔒 Close Stall":"🔓 Open Stall"}</button>`;
+    <button onclick="toggleStall()" style="background:${isOpen?"#DC2626":"#16A34A"};color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;white-space:nowrap">${isOpen?"🔒 Close Stall":"🔓 Open Stall"}</button>`
+    + (isOpen ? (function(){
+        const pz = !!(stallState && stallState.paused);
+        return `<div style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #E5E0D8;padding-top:10px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:${pz?"#DC2626":"#1C1917"}">${pz?"⏸️ New orders PAUSED":"Too busy?"}</div>
+            <div style="font-size:11px;color:#78716C;margin-top:2px">${pz?("Customers cannot order. "+(stallState.wait?("Wait shown: "+stallState.wait):"")):"Stop new orders. Existing orders keep their queue numbers."}</div>
+          </div>
+          <button onclick="togglePause()" style="background:${pz?"#16A34A":"#F59E0B"};color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;white-space:nowrap">${pz?"▶️ Resume orders":"⏸️ Pause new orders"}</button>
+        </div>`;
+      })() : "");
+  bar.style.flexWrap = "wrap";
+  renderPause();
 
   // Only ever show the closed screen on Firebase's word, never on a cache
   const cs = document.getElementById("closed-screen");
@@ -4807,7 +4872,7 @@ const ordersRef = db.ref("orders");
 // Firebase remembers the signed-in account in this browser, so a staff device
 // survives a refresh without being asked again. Shown in Admin so a device
 // serving a cached older copy can be spotted before the kitchen goes quiet.
-const BUILD = "2026-10-19-live7";
+const BUILD = "2026-10-30-live8";
 
 // ── AUTO-UPDATE ───────────────────────────────────────────────────────────────
 // GitHub Pages lets browsers keep a page for ~10 minutes, and phones/tablets
@@ -4890,6 +4955,8 @@ db.ref("stall_status").on("value", snap=>{
   renderStallStatus();
   const cs = document.getElementById("closed-screen");
   if(cs){ cs.classList.toggle("hidden", !!stallState.open); }
+  renderPause();
+  try{ updateRecoveryBanner(); }catch(e){}
   if(!stallState.open && stallState.reopen){
     const el = document.getElementById("reopen-msg");
     if(el) el.textContent = stallState.reopen;
